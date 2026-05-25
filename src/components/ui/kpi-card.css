@@ -1,0 +1,107 @@
+/* ============================================
+   KPI Card Component
+   ============================================ */
+
+.kpi-card {
+  position: relative;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: all var(--transition-normal);
+  overflow: hidden;
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+}
+
+.kpi-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg), var(--shadow-glow-blue);
+  transform: translateY(-2px);
+}
+
+.kpi-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.kpi-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.kpi-trend.up {
+  color: var(--accent-green);
+  background: var(--accent-green-dim);
+}
+
+.kpi-trend.down {
+  color: var(--accent-red);
+  background: var(--accent-red-dim);
+}
+
+.kpi-trend.neutral {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-sparkline {
+  margin-top: 12px;
+  height: 40px;
+  opacity: 0.7;
+  transition: opacity var(--transition-fast);
+}
+
+.kpi-card:hover .kpi-sparkline {
+  opacity: 1;
+}
+
+/* Delay animations for staggered effect */
+.kpi-card:nth-child(1) { animation-delay: 0ms; }
+.kpi-card:nth-child(2) { animation-delay: 60ms; }
+.kpi-card:nth-child(3) { animation-delay: 120ms; }
+.kpi-card:nth-child(4) { animation-delay: 180ms; }
+.kpi-card:nth-child(5) { animation-delay: 240ms; }
+.kpi-card:nth-child(6) { animation-delay: 300ms; }
+.kpi-card:nth-child(7) { animation-delay: 360ms; }
+.kpi-card:nth-child(8) { animation-delay: 420ms; }

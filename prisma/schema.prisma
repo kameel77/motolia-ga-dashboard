@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RealtimeSnapshot {
+  id          Int      @id @default(autoincrement())
+  capturedAt  DateTime @default(now())
+  activeUsers Int      @default(0)
+  eventCount  Int      @default(0)
+  keyEvents   Int      @default(0)
+  pageViews   Int      @default(0)
+  topSources  Json?
+  topPages    Json?
+  topCities   Json?
+  createdAt   DateTime @default(now())
+
+  @@index([capturedAt])
+  @@map("realtime_snapshots")
+}
+
+model TrafficBySource {
+  id             Int      @id @default(autoincrement())
+  capturedAt     DateTime
+  source         String
+  medium         String
+  sessions       Int      @default(0)
+  users          Int      @default(0)
+  newUsers       Int      @default(0)
+  bounceRate     Float    @default(0)
+  engagementRate Float    @default(0)
+  conversions    Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([capturedAt])
+  @@index([source, medium])
+  @@map("traffic_by_source")
+}
+
+model TrafficByHour {
+  id          Int      @id @default(autoincrement())
+  capturedAt  DateTime
+  dateHour    String
+  sessions    Int      @default(0)
+  users       Int      @default(0)
+  conversions Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([capturedAt])
+  @@index([dateHour])
+  @@map("traffic_by_hour")
+}
+
+model TrafficByGeo {
+  id          Int      @id @default(autoincrement())
+  capturedAt  DateTime
+  country     String
+  region      String   @default("")
+  city        String   @default("")
+  sessions    Int      @default(0)
+  users       Int      @default(0)
+  conversions Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([capturedAt])
+  @@map("traffic_by_geo")
+}
+
+model TrafficByDevice {
+  id             Int      @id @default(autoincrement())
+  capturedAt     DateTime
+  deviceCategory String
+  sessions       Int      @default(0)
+  users          Int      @default(0)
+  bounceRate     Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([capturedAt])
+  @@map("traffic_by_device")
+}
+
+model TrafficByLandingPage {
+  id          Int      @id @default(autoincrement())
+  capturedAt  DateTime
+  landingPage String
+  sessions    Int      @default(0)
+  users       Int      @default(0)
+  bounceRate  Float    @default(0)
+  conversions Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([capturedAt])
+  @@map("traffic_by_landing_page")
+}
+
+model ConversionEvent {
+  id         Int      @id @default(autoincrement())
+  capturedAt DateTime
+  eventName  String
+  source     String?
+  medium     String?
+  count      Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([capturedAt, eventName])
+  @@map("conversion_events")
+}
+
+model TvSchedule {
+  id          Int      @id @default(autoincrement())
+  zlecenie    String?
+  station     String
+  airDate     DateTime
+  program     String?
+  product     String?
+  spotLength  Int?
+  pasmo       String?
+  spotVersion String?
+  createdAt   DateTime @default(now())
+
+  @@index([airDate])
+  @@index([station])
+  @@map("tv_schedule")
+}
+
+model DailySnapshot {
+  id         Int      @id @default(autoincrement())
+  date       DateTime @db.Date
+  sessions   Int      @default(0)
+  users      Int      @default(0)
+  newUsers   Int      @default(0)
+  bounceRate Float    @default(0)
+  conversions Int     @default(0)
+  avgSessionDuration Float @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([date])
+  @@index([date])
+  @@map("daily_snapshots")
+}

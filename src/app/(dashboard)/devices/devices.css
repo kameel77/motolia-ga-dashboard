@@ -1,0 +1,88 @@
+/* ============================================
+   Devices Page Styles
+   ============================================ */
+
+.devices-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: var(--space-lg);
+  animation: fadeInUp 0.5s ease 0.1s forwards;
+  opacity: 0;
+}
+
+.devices-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+}
+
+.devices-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.devices-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: var(--space-md);
+}
+
+.device-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.device-bar-icon {
+  font-size: 1.25rem;
+  width: 28px;
+  text-align: center;
+}
+
+.device-bar-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-bar-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.device-bar-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.device-bar-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  font-variant-numeric: tabular-nums;
+}
+
+.device-bar-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.device-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.8s ease;
+}
+
+@media (max-width: 768px) {
+  .devices-layout {
+    grid-template-columns: 1fr;
+  }
+}

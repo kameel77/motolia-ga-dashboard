@@ -1,0 +1,193 @@
+/* ============================================
+   Trends & TV Page Styles
+   ============================================ */
+
+.trends-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+  flex-wrap: wrap;
+}
+
+.trends-date-input {
+  padding: 8px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  outline: none;
+  transition: all var(--transition-fast);
+  color-scheme: dark;
+}
+
+.trends-date-input:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-blue-dim);
+}
+
+.trends-toggle-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.trends-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.trends-toggle.active {
+  background: var(--accent-blue-dim);
+  color: var(--accent-blue);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.trends-toggle:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.trends-main-chart {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: var(--space-xl);
+  box-shadow: var(--shadow-card);
+  animation: fadeInUp 0.5s ease forwards;
+}
+
+.trends-chart-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.trends-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.trends-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.trends-legend-line {
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.trends-legend-line.dashed {
+  background: repeating-linear-gradient(
+    90deg,
+    currentColor 0,
+    currentColor 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  height: 2px;
+}
+
+.trends-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* --- Heatmap --- */
+.trends-heatmap-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  animation: fadeInUp 0.5s ease 0.15s forwards;
+  opacity: 0;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: 48px repeat(7, 1fr);
+  gap: 3px;
+}
+
+.heatmap-header {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.heatmap-hour-label {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: var(--radius-xs);
+  min-height: 20px;
+  transition: all var(--transition-fast);
+  cursor: default;
+  position: relative;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.15);
+  z-index: 2;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
+.heatmap-scale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.heatmap-scale-bar {
+  display: flex;
+  gap: 2px;
+}
+
+.heatmap-scale-step {
+  width: 16px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+@media (max-width: 768px) {
+  .trends-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

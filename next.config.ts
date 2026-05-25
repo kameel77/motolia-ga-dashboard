@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "standalone",
+  serverExternalPackages: [
+    "@google-analytics/data",
+    "@prisma/client",
+    "ioredis",
+    "node-cron",
+    "csv-parse",
+    "jsonwebtoken",
+  ],
 };
 
 export default nextConfig;

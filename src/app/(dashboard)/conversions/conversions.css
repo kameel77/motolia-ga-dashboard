@@ -1,0 +1,112 @@
+/* ============================================
+   Conversions Page Styles
+   ============================================ */
+
+.conv-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.conv-chart-section {
+  margin-bottom: var(--space-xl);
+  animation: fadeInUp 0.5s ease 0.15s forwards;
+  opacity: 0;
+}
+
+.conv-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+}
+
+.conv-card-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+/* Funnel */
+.funnel-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 20px 0;
+  animation: fadeInUp 0.5s ease 0.2s forwards;
+  opacity: 0;
+}
+
+.funnel-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.funnel-bar {
+  width: 100%;
+  height: 80px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  position: relative;
+  transition: transform var(--transition-fast);
+}
+
+.funnel-bar:hover {
+  transform: scale(1.05);
+}
+
+.funnel-step-label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.funnel-step-pct {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.funnel-arrow {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.conv-table-section {
+  animation: fadeInUp 0.5s ease 0.25s forwards;
+  opacity: 0;
+}
+
+@media (max-width: 1200px) {
+  .conv-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .conv-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .funnel-container {
+    flex-direction: column;
+  }
+
+  .funnel-arrow {
+    transform: rotate(90deg);
+  }
+}

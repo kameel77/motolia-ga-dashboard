@@ -1,0 +1,131 @@
+/* ============================================
+   Settings Page Styles
+   ============================================ */
+
+.settings-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+}
+
+.settings-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  animation: fadeInUp 0.5s ease forwards;
+}
+
+.settings-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.settings-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-upload-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.settings-upload-zone:hover {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-dim);
+}
+
+.settings-upload-zone.dragging {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-dim);
+}
+
+.settings-upload-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.settings-upload-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.settings-upload-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.settings-file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.settings-preview {
+  margin-top: var(--space-md);
+}
+
+.settings-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--accent-green-dim);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-md);
+  font-size: 0.8125rem;
+  color: var(--accent-green);
+}
+
+.settings-status.error {
+  background: var(--accent-red-dim);
+  color: var(--accent-red);
+}
+
+.settings-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.settings-info-label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.settings-info-value {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 768px) {
+  .settings-sections {
+    grid-template-columns: 1fr;
+  }
+}

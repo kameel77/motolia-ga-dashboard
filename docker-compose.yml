@@ -1,0 +1,73 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://motolia:${DB_PASSWORD}@motolia-ga-db:5432/ga_dashboard
+      - REDIS_URL=redis://motolia-ga-redis:6379
+      - GA4_PROPERTY_ID=${GA4_PROPERTY_ID}
+      - GA_CLIENT_EMAIL=${GA_CLIENT_EMAIL}
+      - GA_PRIVATE_KEY=${GA_PRIVATE_KEY}
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
+      - CRON_INTERVAL_MINUTES=${CRON_INTERVAL_MINUTES:-5}
+      - JWT_SECRET=${JWT_SECRET}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://analytics.motolia.pl}
+      - NODE_ENV=production
+    networks:
+      - motolia-ga-internal
+      - coolify
+    depends_on:
+      motolia-ga-db:
+        condition: service_healthy
+      motolia-ga-redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  motolia-ga-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ga_dashboard
+      POSTGRES_USER: motolia
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - motolia-ga-pgdata:/var/lib/postgresql/data
+    networks:
+      - motolia-ga-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U motolia -d ga_dashboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  motolia-ga-redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - motolia-ga-redis:/data
+    networks:
+      - motolia-ga-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  motolia-ga-internal:
+    driver: bridge
+  coolify:
+    external: true
+
+volumes:
+  motolia-ga-pgdata:
+  motolia-ga-redis:
