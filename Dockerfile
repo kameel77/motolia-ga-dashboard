@@ -22,6 +22,9 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# Install prisma CLI for migrations
+RUN npm install -g prisma@6
+
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
@@ -31,19 +34,21 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/src/worker ./src/worker
 COPY --from=builder /app/src/lib ./src/lib
 
-# Install production-only deps for worker
+# Copy worker dependencies from builder
 COPY --from=builder /app/node_modules/@google-analytics ./node_modules/@google-analytics
 COPY --from=builder /app/node_modules/google-auth-library ./node_modules/google-auth-library
 COPY --from=builder /app/node_modules/google-gax ./node_modules/google-gax
 COPY --from=builder /app/node_modules/node-cron ./node_modules/node-cron
 COPY --from=builder /app/node_modules/csv-parse ./node_modules/csv-parse
 COPY --from=builder /app/node_modules/ioredis ./node_modules/ioredis
+COPY --from=builder /app/node_modules/jsonwebtoken ./node_modules/jsonwebtoken
 
-# Start script that runs migrations, cron worker, and Next.js
+# Start script
 COPY start.sh ./start.sh
 RUN chmod +x start.sh
 
-USER nextjs
+# Run migrations as root, then switch to nextjs
+RUN chown -R nextjs:nodejs /app
 
 EXPOSE 3000
 
