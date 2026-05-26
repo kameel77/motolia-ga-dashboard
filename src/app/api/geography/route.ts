@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  const data = { locations };
+  const data = { rows: locations };
 
   await setCache(cacheKey, data, 120);
 

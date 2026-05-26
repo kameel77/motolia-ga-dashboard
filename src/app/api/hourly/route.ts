@@ -81,24 +81,23 @@ export async function GET(request: NextRequest) {
     if (!weekAgoMap.has(hour)) weekAgoMap.set(hour, row);
   }
 
-  const hourly: HourlyEntry[] = [];
+  const points = [];
   for (let h = 0; h < 24; h++) {
-    const hour = h.toString().padStart(2, '0');
-    const today = todayMap.get(hour);
-    const yesterday = yesterdayMap.get(hour);
-    const weekAgo = weekAgoMap.get(hour);
+    const hourStr = h.toString().padStart(2, '0');
+    const today = todayMap.get(hourStr);
+    const yesterday = yesterdayMap.get(hourStr);
+    const weekAgo = weekAgoMap.get(hourStr);
 
-    hourly.push({
-      hour,
+    points.push({
+      hour: h,
       sessions: today?.sessions ?? 0,
-      users: today?.users ?? 0,
       conversions: today?.conversions ?? 0,
       sessionsYesterday: yesterday?.sessions ?? 0,
       sessionsWeekAgo: weekAgo?.sessions ?? 0,
     });
   }
 
-  const data = { hourly, date: dateStr };
+  const data = { points, date: dateStr };
 
   await setCache(cacheKey, data, 60);
 

@@ -47,20 +47,19 @@ export async function GET(request: NextRequest) {
 
   const totalSessions = deviceData.reduce((sum, d) => sum + (d._sum.sessions ?? 0), 0);
 
-  const devices = deviceData.map((d) => {
+  const rows = deviceData.map((d) => {
     const sessions = d._sum.sessions ?? 0;
     return {
-      deviceCategory: d.deviceCategory,
+      device: d.deviceCategory,
       sessions,
       users: d._sum.users ?? 0,
       bounceRate: Math.round((d._avg.bounceRate ?? 0) * 100) / 100,
-      share: totalSessions > 0 ? Math.round((sessions / totalSessions) * 10000) / 100 : 0,
     };
   });
 
-  devices.sort((a, b) => b.sessions - a.sessions);
+  rows.sort((a, b) => b.sessions - a.sessions);
 
-  const data = { devices };
+  const data = { rows };
 
   await setCache(cacheKey, data, 120);
 

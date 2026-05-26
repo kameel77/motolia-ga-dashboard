@@ -21,6 +21,20 @@ function getStartDate(period: Period): Date {
   }
 }
 
+function getChannelGroup(source: string, medium: string): string {
+  const src = source.toLowerCase();
+  const med = medium.toLowerCase();
+  
+  if (med.includes('cpc') || med.includes('ppc') || med.includes('paid')) return 'CPC';
+  if (med.includes('organic')) return 'Organic';
+  if (src.includes('direct') || med.includes('none') || med.includes('direct')) return 'Direct';
+  if (med.includes('referral')) return 'Referral';
+  if (med.includes('email')) return 'Email';
+  if (med.includes('tv') || src.includes('tv')) return 'TV';
+  if (med.includes('social') || med.includes('sm') || src.includes('facebook') || src.includes('instagram')) return 'Social';
+  return 'Other';
+}
+
 export async function GET(request: NextRequest) {
   if (!(await verifyAuth(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -64,23 +78,23 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const channels = channelData.map((ch) => {
+  const rows = channelData.map((ch) => {
     const sessions = ch._sum.sessions ?? 0;
     const conversions = ch._sum.conversions ?? 0;
+    const source = ch.source;
+    const medium = ch.medium;
     return {
-      source: ch.source,
-      medium: ch.medium,
+      sourceMedium: `${source} / ${medium}`,
+      channel: getChannelGroup(source, medium),
       sessions,
       users: ch._sum.users ?? 0,
-      newUsers: ch._sum.newUsers ?? 0,
       bounceRate: Math.round((ch._avg.bounceRate ?? 0) * 100) / 100,
-      engagementRate: Math.round((ch._avg.engagementRate ?? 0) * 100) / 100,
       conversions,
       conversionRate: sessions > 0 ? Math.round((conversions / sessions) * 10000) / 100 : 0,
     };
   });
 
-  const data = { channels };
+  const data = { rows };
 
   await setCache(cacheKey, data, 60);
 

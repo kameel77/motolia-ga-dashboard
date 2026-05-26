@@ -3,6 +3,13 @@ import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
 
+const PASMO_COLORS: Record<string, string> = {
+  day: '#fbbf24',
+  prime: '#ef4444',
+  'early fringe': '#8b5cf6',
+  morning: '#06b6d4',
+};
+
 export async function GET(request: NextRequest) {
   if (!(await verifyAuth(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -27,15 +34,24 @@ export async function GET(request: NextRequest) {
     orderBy: { airDate: 'asc' },
   });
 
-  const spots = schedule.map((s) => ({
-    time: s.airDate.toISOString().slice(11, 16),
-    station: s.station,
-    program: s.program,
-    spotLength: s.spotLength,
-    pasmo: s.pasmo,
-    spotVersion: s.spotVersion,
-    zlecenie: s.zlecenie,
-  }));
+  const spots = schedule.map((s) => {
+    const hour = s.airDate.getHours();
+    const minute = s.airDate.getMinutes();
+    const pasmoKey = s.pasmo?.toLowerCase().trim() || '';
+    const color = PASMO_COLORS[pasmoKey] || '#3b82f6';
+    
+    return {
+      hour,
+      minute,
+      station: s.station,
+      pasmo: s.pasmo,
+      color,
+      program: s.program,
+      spotLength: s.spotLength,
+      spotVersion: s.spotVersion,
+      zlecenie: s.zlecenie,
+    };
+  });
 
   const data = { spots };
 

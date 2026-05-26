@@ -55,37 +55,55 @@ export async function GET(request: NextRequest) {
   const days = getPeriodDays(period);
   const prevStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000);
 
+  // 1. Current Period aggregations
   const currentTraffic = await prisma.trafficBySource.aggregate({
     where: { capturedAt: { gte: startDate, lte: now } },
     _sum: { sessions: true, users: true, newUsers: true, conversions: true },
     _avg: { bounceRate: true, engagementRate: true },
   });
 
+  const currentConversionEvents = await prisma.conversionEvent.groupBy({
+    by: ['eventName'],
+    where: { capturedAt: { gte: startDate, lte: now } },
+    _sum: { count: true },
+  });
+
+  const formSubmissions = currentConversionEvents
+    .filter((e) => e.eventName.toLowerCase().includes('form'))
+    .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
+
+  const phoneCalls = currentConversionEvents
+    .filter((e) => e.eventName.toLowerCase().includes('phone') || e.eventName.toLowerCase().includes('call'))
+    .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
+
+  // 2. Previous Period aggregations
   const prevTraffic = await prisma.trafficBySource.aggregate({
     where: { capturedAt: { gte: prevStartDate, lt: startDate } },
     _sum: { sessions: true, users: true, newUsers: true, conversions: true },
     _avg: { bounceRate: true, engagementRate: true },
   });
 
-  const conversionEvents = await prisma.conversionEvent.groupBy({
+  const prevConversionEvents = await prisma.conversionEvent.groupBy({
     by: ['eventName'],
-    where: { capturedAt: { gte: startDate, lte: now } },
+    where: { capturedAt: { gte: prevStartDate, lt: startDate } },
     _sum: { count: true },
   });
 
-  const formSubmissions = conversionEvents
+  const prevFormSubmissions = prevConversionEvents
     .filter((e) => e.eventName.toLowerCase().includes('form'))
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
-  const phoneCalls = conversionEvents
+  const prevPhoneCalls = prevConversionEvents
     .filter((e) => e.eventName.toLowerCase().includes('phone') || e.eventName.toLowerCase().includes('call'))
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
+  // 3. Trend from DailySnapshot
   const trend = await prisma.dailySnapshot.findMany({
     where: { date: { gte: startDate, lte: now } },
     orderBy: { date: 'asc' },
   });
 
+  // Calculate current KPIs
   const sessions = currentTraffic._sum.sessions ?? 0;
   const users = currentTraffic._sum.users ?? 0;
   const newUsers = currentTraffic._sum.newUsers ?? 0;
@@ -94,37 +112,62 @@ export async function GET(request: NextRequest) {
   const engagementRate = Math.round((currentTraffic._avg.engagementRate ?? 0) * 100) / 100;
   const conversionRate = sessions > 0 ? Math.round((conversions / sessions) * 10000) / 100 : 0;
 
+  // Calculate previous KPIs
   const prevSessions = prevTraffic._sum.sessions ?? 0;
   const prevUsers = prevTraffic._sum.users ?? 0;
   const prevNewUsers = prevTraffic._sum.newUsers ?? 0;
   const prevConversions = prevTraffic._sum.conversions ?? 0;
-  const prevBounceRate = prevTraffic._avg.bounceRate ?? 0;
-  const prevEngagementRate = prevTraffic._avg.engagementRate ?? 0;
+  const prevBounceRate = Math.round((prevTraffic._avg.bounceRate ?? 0) * 100) / 100;
+  const prevEngagementRate = Math.round((prevTraffic._avg.engagementRate ?? 0) * 100) / 100;
+  const prevConversionRate = prevSessions > 0 ? Math.round((prevConversions / prevSessions) * 10000) / 100 : 0;
 
+  // Map to the format frontend expects
   const data = {
-    kpis: {
-      sessions,
-      users,
-      newUsers,
-      bounceRate,
-      engagementRate,
-      conversions,
-      formSubmissions,
-      phoneCalls,
-      conversionRate,
+    sessions: {
+      value: sessions,
+      previousValue: prevSessions,
+      sparkline: trend.map((t) => t.sessions),
     },
-    trend: {
-      sessions: trend.map((d) => ({ date: d.date, value: d.sessions })),
-      users: trend.map((d) => ({ date: d.date, value: d.users })),
+    users: {
+      value: users,
+      previousValue: prevUsers,
+      sparkline: trend.map((t) => t.users),
     },
-    comparison: {
-      sessionsDelta: calcDelta(sessions, prevSessions),
-      usersDelta: calcDelta(users, prevUsers),
-      newUsersDelta: calcDelta(newUsers, prevNewUsers),
-      bounceRateDelta: calcDelta(bounceRate, prevBounceRate),
-      engagementRateDelta: calcDelta(engagementRate, prevEngagementRate),
-      conversionsDelta: calcDelta(conversions, prevConversions),
+    newUsers: {
+      value: newUsers,
+      previousValue: prevNewUsers,
+      sparkline: trend.map((t) => t.newUsers),
     },
+    bounceRate: {
+      value: bounceRate,
+      previousValue: prevBounceRate,
+      sparkline: trend.map((t) => t.bounceRate),
+    },
+    formSubmissions: {
+      value: formSubmissions,
+      previousValue: prevFormSubmissions,
+      sparkline: [],
+    },
+    phoneClicks: {
+      value: phoneCalls,
+      previousValue: prevPhoneCalls,
+      sparkline: [],
+    },
+    totalConversions: {
+      value: conversions,
+      previousValue: prevConversions,
+      sparkline: trend.map((t) => t.conversions),
+    },
+    conversionRate: {
+      value: conversionRate,
+      previousValue: prevConversionRate,
+      sparkline: trend.map((t) => (t.sessions > 0 ? Math.round((t.conversions / t.sessions) * 10000) / 100 : 0)),
+    },
+    daily: trend.map((t) => ({
+      date: t.date.toISOString().split('T')[0],
+      sessions: t.sessions,
+      users: t.users,
+    })),
   };
 
   await setCache(cacheKey, data, 60);
