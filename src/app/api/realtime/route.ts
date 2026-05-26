@@ -21,15 +21,27 @@ export async function GET(request: NextRequest) {
   const history = await prisma.realtimeSnapshot.findMany({
     orderBy: { capturedAt: 'desc' },
     take: 30,
-    distinct: ['capturedAt'],
+  });
+
+  const now = new Date();
+  const minutes = history.map((snap) => {
+    const diffMs = now.getTime() - new Date(snap.capturedAt).getTime();
+    const minutesAgo = Math.max(0, Math.floor(diffMs / 60000));
+    return {
+      minutesAgo,
+      activeUsers: snap.activeUsers,
+    };
   });
 
   const data = {
-    current: current ?? null,
-    history: history.reverse(),
+    activeUsers: current?.activeUsers ?? 0,
+    minutes,
+    topSources: (current?.topSources as any) ?? [],
+    topPages: (current?.topPages as any) ?? [],
+    topCities: (current?.topCities as any) ?? [],
   };
 
-  await setCache(cacheKey, data, 30);
+  await setCache(cacheKey, data, 10);
 
   return NextResponse.json(data);
 }
