@@ -108,14 +108,30 @@ export interface DailySummaryRow {
 
 const GA4_PROPERTY_ID = process.env.GA4_PROPERTY_ID;
 const GA_CLIENT_EMAIL = process.env.GA_CLIENT_EMAIL;
-const GA_PRIVATE_KEY = process.env.GA_PRIVATE_KEY;
+const GA_PRIVATE_KEY_RAW = process.env.GA_PRIVATE_KEY;
+
+// Decode private key - it's stored as base64 to avoid .env parsing issues
+function decodePrivateKey(): string {
+  if (!GA_PRIVATE_KEY_RAW) return "";
+  try {
+    // Try base64 decode first
+    const decoded = Buffer.from(GA_PRIVATE_KEY_RAW, "base64").toString("utf-8");
+    if (decoded.includes("BEGIN PRIVATE KEY")) {
+      return decoded;
+    }
+  } catch {
+    // Not base64, use as-is
+  }
+  // Fallback: treat as regular escaped string
+  return GA_PRIVATE_KEY_RAW.replace(/\\n/g, "\n");
+}
 
 if (!GA4_PROPERTY_ID) {
   console.warn("[GA4] GA4_PROPERTY_ID not set");
 }
 
 function createClient(): BetaAnalyticsDataClient {
-  if (!GA_CLIENT_EMAIL || !GA_PRIVATE_KEY) {
+  if (!GA_CLIENT_EMAIL || !GA_PRIVATE_KEY_RAW) {
     throw new Error(
       "[GA4] GA_CLIENT_EMAIL and GA_PRIVATE_KEY must be set"
     );
@@ -124,8 +140,7 @@ function createClient(): BetaAnalyticsDataClient {
   return new BetaAnalyticsDataClient({
     credentials: {
       client_email: GA_CLIENT_EMAIL,
-      // The private key often comes with escaped newlines from env vars
-      private_key: GA_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      private_key: decodePrivateKey(),
     },
   });
 }
