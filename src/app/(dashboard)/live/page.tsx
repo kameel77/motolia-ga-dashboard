@@ -173,7 +173,7 @@ export default function LivePage() {
 
       {/* Top Lists Grid */}
       <div className="live-grid">
-        {renderTopList('Top Źródła', '🌐', data?.topSources)}
+        {renderTopList('Top Zdarzenia', '⚡', data?.topSources)}
         {renderTopList('Top Strony', '📄', data?.topPages)}
         {renderTopList('Top Miasta', '📍', data?.topCities)}
       </div>

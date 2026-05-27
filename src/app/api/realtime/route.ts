@@ -36,9 +36,18 @@ export async function GET(request: NextRequest) {
   const data = {
     activeUsers: current?.activeUsers ?? 0,
     minutes,
-    topSources: (current?.topSources as any) ?? [],
-    topPages: (current?.topPages as any) ?? [],
-    topCities: (current?.topCities as any) ?? [],
+    topSources: ((current?.topSources as any[]) ?? []).map((s: any) => ({
+      name: s.eventName ?? '',
+      value: s.eventCount ?? 0,
+    })),
+    topPages: ((current?.topPages as any[]) ?? []).map((p: any) => ({
+      name: p.pagePath ?? '',
+      value: p.activeUsers ?? 0,
+    })),
+    topCities: ((current?.topCities as any[]) ?? []).map((c: any) => ({
+      name: c.city ? `${c.city}, ${c.country}` : (c.country ?? 'Inne'),
+      value: c.activeUsers ?? 0,
+    })),
   };
 
   await setCache(cacheKey, data, 10);

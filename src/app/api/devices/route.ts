@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       device: d.deviceCategory,
       sessions,
       users: d._sum.users ?? 0,
-      bounceRate: Math.round((d._avg.bounceRate ?? 0) * 100) / 100,
+      bounceRate: Math.round((d._avg.bounceRate ?? 0) * 10000) / 100,
     };
   });
 

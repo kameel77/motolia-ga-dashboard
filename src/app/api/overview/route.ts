@@ -108,8 +108,8 @@ export async function GET(request: NextRequest) {
   const users = currentTraffic._sum.users ?? 0;
   const newUsers = currentTraffic._sum.newUsers ?? 0;
   const conversions = currentTraffic._sum.conversions ?? 0;
-  const bounceRate = Math.round((currentTraffic._avg.bounceRate ?? 0) * 100) / 100;
-  const engagementRate = Math.round((currentTraffic._avg.engagementRate ?? 0) * 100) / 100;
+  const bounceRate = Math.round((currentTraffic._avg.bounceRate ?? 0) * 10000) / 100;
+  const engagementRate = Math.round((currentTraffic._avg.engagementRate ?? 0) * 10000) / 100;
   const conversionRate = sessions > 0 ? Math.round((conversions / sessions) * 10000) / 100 : 0;
 
   // Calculate previous KPIs
@@ -117,8 +117,8 @@ export async function GET(request: NextRequest) {
   const prevUsers = prevTraffic._sum.users ?? 0;
   const prevNewUsers = prevTraffic._sum.newUsers ?? 0;
   const prevConversions = prevTraffic._sum.conversions ?? 0;
-  const prevBounceRate = Math.round((prevTraffic._avg.bounceRate ?? 0) * 100) / 100;
-  const prevEngagementRate = Math.round((prevTraffic._avg.engagementRate ?? 0) * 100) / 100;
+  const prevBounceRate = Math.round((prevTraffic._avg.bounceRate ?? 0) * 10000) / 100;
+  const prevEngagementRate = Math.round((prevTraffic._avg.engagementRate ?? 0) * 10000) / 100;
   const prevConversionRate = prevSessions > 0 ? Math.round((prevConversions / prevSessions) * 10000) / 100 : 0;
 
   // Map to the format frontend expects
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
     bounceRate: {
       value: bounceRate,
       previousValue: prevBounceRate,
-      sparkline: trend.map((t) => t.bounceRate),
+      sparkline: trend.map((t) => Math.round(t.bounceRate * 10000) / 100),
     },
     formSubmissions: {
       value: formSubmissions,

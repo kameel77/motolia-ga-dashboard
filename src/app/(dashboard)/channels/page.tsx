@@ -11,6 +11,7 @@ interface ChannelRow {
   sourceMedium: string;
   channel: string;
   sessions: number;
+  engagementRate: number;
   users: number;
   bounceRate: number;
   conversions: number;
@@ -100,6 +101,12 @@ export default function ChannelsPage() {
       label: 'Sesje',
       align: 'right' as const,
       format: (v: unknown) => Number(v).toLocaleString('pl-PL'),
+    },
+    {
+      key: 'engagementRate' as const,
+      label: 'Engagement Rate',
+      align: 'right' as const,
+      format: (v: unknown) => `${Number(v).toFixed(1)}%`,
     },
     {
       key: 'users' as const,

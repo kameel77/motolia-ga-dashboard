@@ -88,7 +88,8 @@ export async function GET(request: NextRequest) {
       channel: getChannelGroup(source, medium),
       sessions,
       users: ch._sum.users ?? 0,
-      bounceRate: Math.round((ch._avg.bounceRate ?? 0) * 100) / 100,
+      bounceRate: Math.round((ch._avg.bounceRate ?? 0) * 10000) / 100,
+      engagementRate: Math.round((ch._avg.engagementRate ?? 0) * 10000) / 100,
       conversions,
       conversionRate: sessions > 0 ? Math.round((conversions / sessions) * 10000) / 100 : 0,
     };
