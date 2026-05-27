@@ -91,7 +91,16 @@ export default function ConversionsPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">🎯 Konwersje</h1>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--accent-red)' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+            </span>
+            Konwersje
+          </h1>
           <p className="page-subtitle">Analiza konwersji i celów</p>
         </div>
         <PeriodSelector value={period} onChange={setPeriod} />

@@ -17,10 +17,40 @@ interface DevicesData {
   rows: DeviceRow[];
 }
 
-const DEVICE_ICONS: Record<string, string> = {
-  mobile: '📱',
-  desktop: '💻',
-  tablet: '📋',
+const getDeviceIcon = (device: string, size: number = 16) => {
+  const d = device.toLowerCase();
+  if (d.includes('mobile') || d.includes('phone')) {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+        <line x1="12" y1="18" x2="12.01" y2="18" />
+      </svg>
+    );
+  }
+  if (d.includes('desktop') || d.includes('computer')) {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+      </svg>
+    );
+  }
+  if (d.includes('tablet') || d.includes('ipad')) {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+        <rect x="4" y="3" width="16" height="18" rx="2" ry="2" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    );
+  }
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
 };
 
 const DEVICE_COLORS: Record<string, string> = {
@@ -62,7 +92,9 @@ export default function DevicesPage() {
       label: 'Urządzenie',
       format: (v: unknown) => (
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>{DEVICE_ICONS[String(v).toLowerCase()] || '🖥️'}</span>
+          <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>
+            {getDeviceIcon(String(v))}
+          </span>
           {String(v)}
         </span>
       ),
@@ -91,7 +123,15 @@ export default function DevicesPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">📱 Urządzenia</h1>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--accent-blue)' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                <line x1="12" y1="18" x2="12.01" y2="18" />
+              </svg>
+            </span>
+            Urządzenia
+          </h1>
           <p className="page-subtitle">
             Podział ruchu wg typu urządzenia
           </p>
@@ -134,8 +174,8 @@ export default function DevicesPage() {
                   DEVICE_COLORS[r.device.toLowerCase()] || '#5c6070';
                 return (
                   <div key={r.device} className="device-bar">
-                    <span className="device-bar-icon">
-                      {DEVICE_ICONS[r.device.toLowerCase()] || '🖥️'}
+                    <span className="device-bar-icon" style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                      {getDeviceIcon(r.device, 18)}
                     </span>
                     <div className="device-bar-info">
                       <div className="device-bar-top">

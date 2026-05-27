@@ -94,7 +94,15 @@ export default function LivePage() {
       <div>
         <div className="page-header">
           <div>
-            <h1 className="page-title">🔴 Live</h1>
+            <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ display: 'flex', alignItems: 'center', color: '#ef4444' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="3" fill="currentColor" />
+                </svg>
+              </span>
+              Live
+            </h1>
             <p className="page-subtitle">Dane w czasie rzeczywistym</p>
           </div>
         </div>
@@ -122,7 +130,15 @@ export default function LivePage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">🔴 Live</h1>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'flex', alignItems: 'center', color: '#ef4444' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="3" fill="currentColor" />
+              </svg>
+            </span>
+            Live
+          </h1>
           <p className="page-subtitle">Dane w czasie rzeczywistym</p>
         </div>
         <div className="live-refresh-info">

@@ -97,7 +97,57 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const data = { points, date: dateStr };
+  // 4. Heatmap aggregation (last 30 days)
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const heatmapRaw = await prisma.trafficByHour.findMany({
+    where: { capturedAt: { gte: thirtyDaysAgo } },
+  });
+
+  const deduplicated = new Map<string, typeof heatmapRaw[0]>();
+  for (const row of heatmapRaw) {
+    const existing = deduplicated.get(row.dateHour);
+    if (!existing || row.id > existing.id) {
+      deduplicated.set(row.dateHour, row);
+    }
+  }
+
+  const heatmapSum = Array.from({ length: 7 }, () => Array(24).fill(0));
+  const heatmapCount = Array.from({ length: 7 }, () => Array(24).fill(0));
+
+  for (const row of deduplicated.values()) {
+    const dh = row.dateHour; // "YYYYMMDDHH"
+    if (dh.length !== 10) continue;
+    const year = parseInt(dh.slice(0, 4));
+    const month = parseInt(dh.slice(4, 6)) - 1;
+    const day = parseInt(dh.slice(6, 8));
+    const hour = parseInt(dh.slice(8, 10));
+
+    const dateObj = new Date(year, month, day);
+    if (isNaN(dateObj.getTime())) continue;
+
+    const jsDay = dateObj.getDay(); // 0 = Sunday, 1 = Monday...
+    const dayIndex = jsDay === 0 ? 6 : jsDay - 1; // 0 = Monday, ..., 6 = Sunday
+
+    heatmapSum[dayIndex][hour] += row.sessions;
+    heatmapCount[dayIndex][hour] += 1;
+  }
+
+  const heatmap = [];
+  for (let d = 0; d < 7; d++) {
+    for (let h = 0; h < 24; h++) {
+      const sum = heatmapSum[d][h];
+      const count = heatmapCount[d][h];
+      const avg = count > 0 ? Math.round(sum / count) : 0;
+      heatmap.push({
+        day: d,
+        hour: h,
+        sessions: avg,
+      });
+    }
+  }
+
+  const data = { points, heatmap, date: dateStr };
 
   await setCache(cacheKey, data, 60);
 

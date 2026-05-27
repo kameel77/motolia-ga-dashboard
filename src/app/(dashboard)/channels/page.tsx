@@ -138,7 +138,14 @@ export default function ChannelsPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">📺 Kanały</h1>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--accent-purple)' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 3H2l8 9v6l4 2v-8z" />
+              </svg>
+            </span>
+            Kanały
+          </h1>
           <p className="page-subtitle">Analiza źródeł ruchu i mediów</p>
         </div>
         <PeriodSelector value={period} onChange={setPeriod} />

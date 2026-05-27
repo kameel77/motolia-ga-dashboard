@@ -28,6 +28,8 @@ interface LineChartProps {
   xTickFormatter?: (value: string) => string;
 }
 
+const sanitizeId = (str: string) => str.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+
 function CustomTooltip({
   active,
   payload,
@@ -79,7 +81,7 @@ export default function LineChartComponent({
           {lines.map((line) => (
             <linearGradient
               key={`grad-${line.key}`}
-              id={`gradient-${line.key}`}
+              id={`gradient-${sanitizeId(line.key)}`}
               x1="0"
               y1="0"
               x2="0"
@@ -94,7 +96,7 @@ export default function LineChartComponent({
         {showGrid && (
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="rgba(255,255,255,0.04)"
+            stroke="var(--border-color)"
             vertical={false}
           />
         )}
@@ -144,12 +146,12 @@ export default function LineChartComponent({
             stroke={line.color}
             strokeWidth={2}
             strokeDasharray={line.dashed ? '6 4' : undefined}
-            fill={`url(#gradient-${line.key})`}
+            fill={`url(#gradient-${sanitizeId(line.key)})`}
             dot={false}
             activeDot={{
               r: 4,
               fill: line.color,
-              stroke: '#1a1d27',
+              stroke: 'var(--bg-card)',
               strokeWidth: 2,
             }}
           />

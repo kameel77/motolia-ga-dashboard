@@ -32,6 +32,7 @@ interface TVSpot {
 
 interface HourlyData {
   points: HourlyPoint[];
+  heatmap?: HeatmapValue[];
 }
 
 interface TVOverlayData {
@@ -167,16 +168,18 @@ export default function TrendsPage() {
 
   const spots = tvData?.spots ?? [];
 
-  // Build heatmap data (mock for now, would come from weekly API)
+  // Build heatmap data from database weekly aggregation
   const heatmapData = useMemo(() => {
+    if (hourly?.heatmap && hourly.heatmap.length > 0) {
+      return hourly.heatmap;
+    }
     const cells: HeatmapValue[] = [];
     for (let d = 0; d < 7; d++) {
       for (let h = 0; h < 24; h++) {
-        const point = hourly?.points?.find((p) => p.hour === h);
         cells.push({
           day: d,
           hour: h,
-          sessions: point ? Math.round(point.sessions * (0.7 + Math.random() * 0.6)) : 0,
+          sessions: 0,
         });
       }
     }
@@ -198,7 +201,14 @@ export default function TrendsPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">📈 Trendy & TV</h1>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--accent-cyan)' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+            </span>
+            Trendy & TV
+          </h1>
           <p className="page-subtitle">
             Godzinowy timeline z nakładką spotów TV
           </p>
@@ -296,7 +306,7 @@ export default function TrendsPage() {
 
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.04)"
+                stroke="var(--border-color)"
                 vertical={false}
               />
               <XAxis
@@ -337,7 +347,7 @@ export default function TrendsPage() {
                 strokeWidth={2}
                 fill="url(#gradSessions)"
                 dot={false}
-                activeDot={{ r: 4, fill: '#3b82f6', stroke: '#1a1d27', strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: '#3b82f6', stroke: 'var(--bg-card)', strokeWidth: 2 }}
               />
 
               <Line
@@ -346,7 +356,7 @@ export default function TrendsPage() {
                 stroke="#10b981"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: '#10b981', stroke: '#1a1d27', strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: '#10b981', stroke: 'var(--bg-card)', strokeWidth: 2 }}
               />
 
               {showYesterday && (
