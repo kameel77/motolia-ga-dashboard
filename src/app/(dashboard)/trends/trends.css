@@ -19,7 +19,7 @@
   font-size: 0.875rem;
   outline: none;
   transition: all var(--transition-fast);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 .trends-date-input:focus {
@@ -125,8 +125,10 @@
 
 .heatmap-grid {
   display: grid;
-  grid-template-columns: 48px repeat(7, 1fr);
+  grid-template-columns: 60px repeat(24, 1fr);
   gap: 3px;
+  overflow-x: auto;
+  padding-bottom: 8px;
 }
 
 .heatmap-header {
@@ -139,14 +141,14 @@
   letter-spacing: 0.05em;
 }
 
-.heatmap-hour-label {
+.heatmap-day-label {
   font-size: 0.6875rem;
+  font-weight: 600;
   color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding-right: 8px;
-  font-variant-numeric: tabular-nums;
+  padding-right: 12px;
 }
 
 .heatmap-cell {

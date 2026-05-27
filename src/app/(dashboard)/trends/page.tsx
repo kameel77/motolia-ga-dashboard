@@ -382,32 +382,32 @@ export default function TrendsPage() {
         </div>
 
         <div className="heatmap-grid">
-          {/* Header row */}
+          {/* Header row: hours 0-23 */}
           <div />
-          {DAYS.map((d) => (
-            <div key={d} className="heatmap-header">
-              {d}
+          {Array.from({ length: 24 }).map((_, h) => (
+            <div key={`header-${h}`} className="heatmap-header" style={{ fontSize: '0.625rem' }}>
+              {String(h).padStart(2, '0')}
             </div>
           ))}
 
-          {/* Data rows */}
-          {Array.from({ length: 24 }).map((_, h) => (
+          {/* Data rows: days 0-6 */}
+          {DAYS.map((dName, d) => (
             <>
-              <div key={`label-${h}`} className="heatmap-hour-label">
-                {formatHour(h)}
+              <div key={`day-label-${d}`} className="heatmap-day-label">
+                {dName}
               </div>
-              {Array.from({ length: 7 }).map((_, d) => {
+              {Array.from({ length: 24 }).map((_, h) => {
                 const cell = heatmapData.find(
                   (c) => c.day === d && c.hour === h
                 );
                 return (
                   <div
-                    key={`cell-${h}-${d}`}
+                    key={`cell-${d}-${h}`}
                     className="heatmap-cell"
                     style={{
                       background: heatmapColor(cell?.sessions ?? 0),
                     }}
-                    title={`${DAYS[d]} ${formatHour(h)}: ${cell?.sessions ?? 0} sesji`}
+                    title={`${dName} ${formatHour(h)}: ${cell?.sessions ?? 0} sesji`}
                   />
                 );
               })}
