@@ -22,20 +22,53 @@ interface CsvRow {
 }
 
 function parseDate(dateStr: string, timeStr: string): Date {
+  if (!dateStr || !timeStr) {
+    return new Date();
+  }
   const [day, month, year] = dateStr.split('.');
   const [hours, minutes, seconds] = timeStr.split(':');
   return new Date(
-    parseInt(year),
-    parseInt(month) - 1,
-    parseInt(day),
-    parseInt(hours),
-    parseInt(minutes),
-    parseInt(seconds || '0')
+    parseInt(year) || new Date().getFullYear(),
+    (parseInt(month) || 1) - 1,
+    parseInt(day) || 1,
+    parseInt(hours) || 0,
+    parseInt(minutes) || 0,
+    parseInt(seconds || '0') || 0
   );
 }
 
 function parseSpotLength(lengthStr: string): number {
+  if (!lengthStr) return 0;
   return parseInt(lengthStr.replace(/[^0-9]/g, '')) || 0;
+}
+
+function getRowValue(row: any, ...keys: string[]): string {
+  // Try exact match first
+  for (const k of keys) {
+    if (row[k] !== undefined) return row[k];
+  }
+  
+  // Try case-insensitive, trimmed, and normalized match
+  const rowKeys = Object.keys(row);
+  for (const k of keys) {
+    const normK = k.toLowerCase().trim();
+    for (const rk of rowKeys) {
+      const normRk = rk.toLowerCase().trim();
+      if (normRk === normK) return row[rk];
+      
+      // Handle potential encoding issues with Polish characters by comparing prefixes/suffixes
+      if (normK === 'długość' && (normRk.includes('dł') || normRk.includes('dl') || normRk.includes('ug'))) {
+        return row[rk];
+      }
+      if (normK === 'typ sprzedaży' && (normRk.includes('sprzed') || normRk.includes('sprz'))) {
+        return row[rk];
+      }
+      if (normK === 'godzina planowana' && (normRk.includes('godzin') || normRk.includes('plan'))) {
+        return row[rk];
+      }
+    }
+  }
+  return '';
 }
 
 export async function POST(request: NextRequest) {
@@ -53,11 +86,13 @@ export async function POST(request: NextRequest) {
     }
 
     const csvContent = await file.text();
+    const firstLine = csvContent.split('\n')[0] || '';
+    const delimiter = firstLine.includes(';') ? ';' : ',';
 
-    const records: CsvRow[] = parse(csvContent, {
+    const records: any[] = parse(csvContent, {
       columns: true,
       skip_empty_lines: true,
-      delimiter: ';',
+      delimiter,
       trim: true,
       bom: true,
     });
@@ -68,17 +103,22 @@ export async function POST(request: NextRequest) {
 
     const uniqueDates = new Set<string>();
     const rows = records.map((row) => {
-      const airDate = parseDate(row.Data, row['Godzina planowana']);
-      uniqueDates.add(row.Data);
+      const dateVal = getRowValue(row, 'Data', 'date');
+      const timeVal = getRowValue(row, 'Godzina planowana', 'time');
+      const airDate = parseDate(dateVal, timeVal);
+      if (dateVal) {
+        uniqueDates.add(dateVal);
+      }
+      
       return {
-        zlecenie: row.Zlecenie,
-        station: row.Stacja,
+        zlecenie: getRowValue(row, 'Zlecenie', 'zlecenie'),
+        station: getRowValue(row, 'Stacja', 'station'),
         airDate,
-        program: row.Program,
-        product: row.Produkt,
-        spotLength: parseSpotLength(row['Długość']),
-        pasmo: row.Pasmo,
-        spotVersion: row.Wersja,
+        program: getRowValue(row, 'Program', 'program'),
+        product: getRowValue(row, 'Produkt', 'product'),
+        spotLength: parseSpotLength(getRowValue(row, 'Długość', 'duration')),
+        pasmo: getRowValue(row, 'Pasmo', 'pasmo'),
+        spotVersion: getRowValue(row, 'Wersja', 'version'),
       };
     });
 

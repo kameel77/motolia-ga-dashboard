@@ -63,35 +63,29 @@ export default function SettingsPage() {
       if (lines.length < 2) return;
 
       const delimiter = lines[0].includes(';') ? ';' : ',';
-      const headers = lines[0].split(delimiter).map((h) => h.trim().toLowerCase());
+      const headers = lines[0].split(delimiter).map((h) => h.trim().replace(/^"|"$/g, '').toLowerCase());
       const rows: TVScheduleRow[] = [];
 
-      const dateIdx = headers.indexOf('data') !== -1 ? headers.indexOf('data') : headers.indexOf('date');
-      const timeIdx = headers.indexOf('godzina planowana') !== -1 ? headers.indexOf('godzina planowana') : headers.indexOf('time');
-      const stationIdx = headers.indexOf('stacja') !== -1 ? headers.indexOf('stacja') : headers.indexOf('station');
-      const pasmoIdx = headers.indexOf('pasmo');
+      const dateIdx = headers.findIndex(h => h === 'data' || h === 'date');
+      const timeIdx = headers.findIndex(h => h === 'godzina planowana' || h === 'time' || h === 'godzina');
+      const stationIdx = headers.findIndex(h => h === 'stacja' || h === 'station');
+      const pasmoIdx = headers.findIndex(h => h === 'pasmo');
       
-      let durationIdx = headers.indexOf('długość');
-      if (durationIdx === -1) {
-        durationIdx = headers.indexOf('duration');
-      }
-      if (durationIdx === -1) {
-        durationIdx = headers.findIndex(h => h.includes('dług') || h.includes('dur'));
-      }
+      let durationIdx = headers.findIndex(h => h === 'długość' || h === 'duration' || h.includes('dług') || h.includes('dur'));
 
       for (let i = 1; i < Math.min(lines.length, 11); i++) {
         const cols = lines[i].split(delimiter).map((c) => c.trim().replace(/^"|"$/g, ''));
         
-        const rawDate = dateIdx !== -1 ? cols[dateIdx] : (cols[0] || '');
-        const rawTime = timeIdx !== -1 ? cols[timeIdx] : (cols[1] || '');
-        const rawStation = stationIdx !== -1 ? cols[stationIdx] : (cols[2] || '');
-        const rawPasmo = pasmoIdx !== -1 ? cols[pasmoIdx] : (cols[3] || '');
+        const rawDate = dateIdx !== -1 ? cols[dateIdx] : (cols[4] || cols[0] || '');
+        const rawTime = timeIdx !== -1 ? cols[timeIdx] : (cols[5] || cols[1] || '');
+        const rawStation = stationIdx !== -1 ? cols[stationIdx] : (cols[3] || cols[2] || '');
+        const rawPasmo = pasmoIdx !== -1 ? cols[pasmoIdx] : (cols[10] || cols[3] || '');
         
         let rawDuration = 0;
         if (durationIdx !== -1 && cols[durationIdx]) {
           rawDuration = parseInt(cols[durationIdx].replace(/[^0-9]/g, ''), 10) || 0;
         } else {
-          rawDuration = parseInt(cols[4] || '0', 10);
+          rawDuration = parseInt(cols[9] || cols[4] || '0', 10);
         }
 
         rows.push({
