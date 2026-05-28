@@ -42,10 +42,15 @@ export default function LoginPage() {
 
       <div className="login-card">
         {/* Brand */}
-        <div className="login-brand">
-          <div className="login-logo">M</div>
-          <div className="login-brand-name">Motolia</div>
-          <div className="login-brand-subtitle">Analytics Dashboard</div>
+        <div className="login-brand" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
+          <img 
+            src="/logo.png" 
+            alt="Motolia Analytics" 
+            style={{ height: '36px', width: 'auto', objectFit: 'contain', marginBottom: '8px' }} 
+          />
+          <div className="login-brand-subtitle" style={{ margin: 0 }}>
+            Analytics Dashboard
+          </div>
         </div>
 
         {/* Form */}

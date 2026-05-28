@@ -156,7 +156,13 @@ export default function DashboardLayout({
           <span className="hamburger-line" />
           <span className="hamburger-line" />
         </button>
-        <span className="mobile-brand">Motolia Analytics</span>
+        <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <img 
+            src="/logo.png" 
+            alt="Motolia Analytics" 
+            style={{ height: '24px', width: 'auto', objectFit: 'contain' }} 
+          />
+        </div>
         <div style={{ width: 36 }} />
       </header>
 
@@ -171,13 +177,21 @@ export default function DashboardLayout({
         className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
       >
         {/* Brand */}
-        <div className="sidebar-brand">
-          <div className="sidebar-logo">M</div>
-          <div className="sidebar-brand-text">
-            <span className="sidebar-brand-name">Motolia</span>
-            <span className="sidebar-brand-subtitle">Analytics</span>
-          </div>
-        </div>
+        <Link href="/live" className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', padding: '16px 20px', minHeight: '68px', borderBottom: '1px solid var(--border-color)', textDecoration: 'none', gap: '12px' }}>
+          {collapsed ? (
+            <img 
+              src="/favicon.png" 
+              alt="Motolia" 
+              style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+            />
+          ) : (
+            <img 
+              src="/logo.png" 
+              alt="Motolia Analytics" 
+              style={{ height: '28px', width: 'auto', objectFit: 'contain', maxWidth: '100%' }} 
+            />
+          )}
+        </Link>
 
         {/* Navigation */}
         <nav className="sidebar-nav">
