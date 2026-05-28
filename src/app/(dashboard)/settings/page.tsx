@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import DataTable from '@/components/ui/DataTable';
 import './settings.css';
 
@@ -12,6 +12,14 @@ interface TVScheduleRow {
   duration: number;
 }
 
+interface ImportLog {
+  id: number;
+  filename: string;
+  recordCount: number;
+  mode: 'add' | 'overwrite';
+  importedAt: string;
+}
+
 export default function SettingsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -21,7 +29,25 @@ export default function SettingsPage() {
   } | null>(null);
   const [preview, setPreview] = useState<TVScheduleRow[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [logs, setLogs] = useState<ImportLog[]>([]);
+  const [overwrite, setOverwrite] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const fetchLogs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tv-schedule');
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs || []);
+      }
+    } catch {
+      // silently fail
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const handleFile = useCallback((f: File | null) => {
     if (!f) return;
@@ -62,6 +88,7 @@ export default function SettingsPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('overwrite', overwrite ? 'true' : 'false');
 
       const res = await fetch('/api/tv-schedule', {
         method: 'POST',
@@ -75,6 +102,7 @@ export default function SettingsPage() {
         });
         setFile(null);
         if (fileRef.current) fileRef.current.value = '';
+        fetchLogs(); // refresh log history instantly
       } else {
         const err = await res.text();
         setStatus({
@@ -140,6 +168,35 @@ export default function SettingsPage() {
               </svg>
             </span>
             Harmonogram TV — Import CSV
+          </div>
+
+          {/* Import Method Toggle */}
+          <div className="settings-import-mode" style={{ margin: '16px 0', padding: '12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Metoda importu:
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.875rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <input 
+                  type="radio" 
+                  name="importMode" 
+                  checked={overwrite === true} 
+                  onChange={() => setOverwrite(true)} 
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: overwrite ? 600 : 400 }}>Nadpisz istniejące emisje z dni obecnych w pliku (zalecane)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <input 
+                  type="radio" 
+                  name="importMode" 
+                  checked={overwrite === false} 
+                  onChange={() => setOverwrite(false)} 
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: !overwrite ? 600 : 400 }}>Dopisz nowe emisje, zachowując istniejące</span>
+              </label>
+            </div>
           </div>
 
           <div
@@ -225,6 +282,57 @@ export default function SettingsPage() {
                 columns={previewColumns}
                 data={preview as unknown as Record<string, unknown>[]}
               />
+            </div>
+          )}
+
+          {/* Import History Logs */}
+          {logs.length > 0 && (
+            <div className="settings-logs" style={{ marginTop: 24, borderTop: '1px solid var(--border-color)', paddingTop: 20 }}>
+              <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📋</span> Historia ostatnich importów:
+              </div>
+              <div className="table-container" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', fontSize: '0.8125rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '8px 12px', fontWeight: 600 }}>Plik</th>
+                      <th style={{ padding: '8px 12px', fontWeight: 600 }}>Wiersze</th>
+                      <th style={{ padding: '8px 12px', fontWeight: 600 }}>Tryb</th>
+                      <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Data importu</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log) => (
+                      <tr key={log.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.03)' }}>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-primary)', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.filename}>
+                          {log.filename}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                          {log.recordCount} wierszy
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{ 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '0.6875rem', 
+                            fontWeight: 600,
+                            background: log.mode === 'overwrite' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                            color: log.mode === 'overwrite' ? '#ef4444' : '#10b981',
+                            border: log.mode === 'overwrite' ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)',
+                            display: 'inline-block'
+                          }}>
+                            {log.mode === 'overwrite' ? 'Nadpisz' : 'Dopisz'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                          {new Date(log.importedAt).toLocaleDateString('pl-PL')}{' '}
+                          {new Date(log.importedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

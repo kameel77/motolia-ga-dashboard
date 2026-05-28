@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const overwrite = formData.get('overwrite') !== 'false';
 
     if (!file) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
@@ -81,20 +82,31 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    for (const dateStr of uniqueDates) {
-      const [day, month, year] = dateStr.split('.');
-      const dayStart = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      const dayEnd = new Date(parseInt(year), parseInt(month) - 1, parseInt(day) + 1);
+    if (overwrite) {
+      for (const dateStr of uniqueDates) {
+        const [day, month, year] = dateStr.split('.');
+        const dayStart = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        const dayEnd = new Date(parseInt(year), parseInt(month) - 1, parseInt(day) + 1);
 
-      await prisma.tvSchedule.deleteMany({
-        where: {
-          airDate: { gte: dayStart, lt: dayEnd },
-        },
-      });
+        await prisma.tvSchedule.deleteMany({
+          where: {
+            airDate: { gte: dayStart, lt: dayEnd },
+          },
+        });
+      }
     }
 
     await prisma.tvSchedule.createMany({
       data: rows,
+    });
+
+    // Save import log to database
+    await prisma.importLog.create({
+      data: {
+        filename: file.name || 'imported_file.csv',
+        recordCount: rows.length,
+        mode: overwrite ? 'overwrite' : 'add',
+      },
     });
 
     for (const dateStr of uniqueDates) {
@@ -103,6 +115,10 @@ export async function POST(request: NextRequest) {
       if (redis) {
         await redis.del(`tv-overlay:${isoDate}`);
       }
+    }
+
+    if (redis) {
+      await redis.del('tv-schedule:list');
     }
 
     return NextResponse.json({ success: true, imported: rows.length });
@@ -131,9 +147,14 @@ export async function GET(request: NextRequest) {
     take: 100,
   });
 
-  const data = { entries };
+  const logs = await prisma.importLog.findMany({
+    orderBy: { importedAt: 'desc' },
+    take: 10,
+  });
 
-  await setCache(cacheKey, data, 60);
+  const data = { entries, logs };
+
+  await setCache(cacheKey, data, 10); // low TTL for admin freshness
 
   return NextResponse.json(data);
 }

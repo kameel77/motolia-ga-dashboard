@@ -17,6 +17,7 @@ interface TopItem {
 interface RealtimeData {
   activeUsers: number;
   minutes: RealtimeMinute[];
+  spots?: any[];
   topSources: TopItem[];
   topPages: TopItem[];
   topCities: TopItem[];
@@ -182,6 +183,7 @@ export default function LivePage() {
               ]}
               height={200}
               showLegend={false}
+              spots={data?.spots}
             />
           </div>
         </div>

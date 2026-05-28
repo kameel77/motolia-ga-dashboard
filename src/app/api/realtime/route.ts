@@ -3,6 +3,13 @@ import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
 
+const PASMO_COLORS: Record<string, string> = {
+  day: '#fbbf24',
+  prime: '#ef4444',
+  'early fringe': '#8b5cf6',
+  morning: '#06b6d4',
+};
+
 export async function GET(request: NextRequest) {
   if (!(await verifyAuth(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -33,9 +40,38 @@ export async function GET(request: NextRequest) {
     };
   });
 
+  // Query spots in the last 30 minutes relative to server time
+  const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+  const activeSpots = await prisma.tvSchedule.findMany({
+    where: {
+      airDate: {
+        gte: thirtyMinutesAgo,
+        lte: now,
+      },
+    },
+    orderBy: { airDate: 'asc' },
+  });
+
+  const spots = activeSpots.map((spot) => {
+    const diffMs = now.getTime() - new Date(spot.airDate).getTime();
+    const minutesAgo = Math.max(0, Math.floor(diffMs / 60000));
+    const pasmoKey = spot.pasmo?.toLowerCase().trim() || '';
+    const color = PASMO_COLORS[pasmoKey] || '#3b82f6';
+    return {
+      minutesAgo,
+      station: spot.station,
+      program: spot.program,
+      spotLength: spot.spotLength,
+      spotVersion: spot.spotVersion,
+      pasmo: spot.pasmo,
+      color,
+    };
+  });
+
   const data = {
     activeUsers: current?.activeUsers ?? 0,
     minutes,
+    spots,
     topSources: ((current?.topSources as any[]) ?? []).map((s: any) => ({
       name: s.eventName ?? '',
       value: s.eventCount ?? 0,

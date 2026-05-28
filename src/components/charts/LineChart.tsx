@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine,
 } from 'recharts';
 
 interface LineConfig {
@@ -26,6 +27,7 @@ interface LineChartProps {
   showGrid?: boolean;
   showLegend?: boolean;
   xTickFormatter?: (value: string) => string;
+  spots?: any[];
 }
 
 const sanitizeId = (str: string) => str.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
@@ -34,6 +36,7 @@ function CustomTooltip({
   active,
   payload,
   label,
+  spots,
 }: {
   active?: boolean;
   payload?: Array<{
@@ -42,10 +45,16 @@ function CustomTooltip({
     value: number;
   }>;
   label?: string;
+  spots?: any[];
 }) {
   if (!active || !payload?.length) return null;
+
+  // Extract minutesAgo from label e.g., "15m" -> 15
+  const minute = label ? parseInt(label.replace('m', '')) : null;
+  const minuteSpots = spots?.filter((s) => s.minutesAgo === minute) ?? [];
+
   return (
-    <div className="chart-tooltip">
+    <div className="chart-tooltip" style={{ minWidth: 180, maxWidth: 280 }}>
       <div className="chart-tooltip-label">{label}</div>
       {payload.map((entry, i) => (
         <div key={i} className="chart-tooltip-item">
@@ -61,6 +70,30 @@ function CustomTooltip({
           </span>
         </div>
       ))}
+
+      {minuteSpots.length > 0 && (
+        <div style={{ marginTop: 8, borderTop: '1px solid var(--border-color)', paddingTop: 8 }}>
+          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            📺 Emisje TV:
+          </div>
+          {minuteSpots.map((s, i) => (
+            <div key={i} style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', padding: '4px 0', borderBottom: i < minuteSpots.length - 1 ? '1px dashed rgba(255,255,255,0.04)' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--text-primary)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                {s.station}
+              </div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: 2, paddingLeft: 12 }}>
+                Program: <span style={{ color: 'var(--text-primary)' }}>{s.program || '—'}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 2, fontSize: '0.6875rem', color: 'var(--text-muted)', paddingLeft: 12 }}>
+                <span>Dł: {s.spotLength}s</span>
+                <span>Wer: {s.spotVersion || '—'}</span>
+                <span style={{ color: s.color, fontWeight: 600 }}>{s.pasmo}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -73,6 +106,7 @@ export default function LineChartComponent({
   showGrid = true,
   showLegend = true,
   xTickFormatter,
+  spots,
 }: LineChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -121,7 +155,19 @@ export default function LineChartComponent({
           }}
         />
 
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip spots={spots} />} />
+
+        {/* TV Spot Reference Lines */}
+        {spots?.map((spot, i) => (
+          <ReferenceLine
+            key={i}
+            x={`${spot.minutesAgo}m`}
+            stroke={spot.color}
+            strokeDasharray="4 4"
+            strokeWidth={1.5}
+            strokeOpacity={0.8}
+          />
+        ))}
 
         {showLegend && (
           <Legend

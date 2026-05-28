@@ -28,6 +28,10 @@ interface TVSpot {
   station: string;
   pasmo: string;
   color: string;
+  program?: string | null;
+  spotLength?: number | null;
+  spotVersion?: string | null;
+  zlecenie?: string | null;
 }
 
 interface HourlyData {
@@ -74,7 +78,7 @@ function CustomTooltip({
   const hourSpots = spots?.filter((s) => s.hour === hour) ?? [];
 
   return (
-    <div className="chart-tooltip" style={{ maxWidth: 260 }}>
+    <div className="chart-tooltip" style={{ minWidth: 180, maxWidth: 280 }}>
       <div className="chart-tooltip-label">{formatHour(Number(hour))}</div>
       {payload.map((entry, i) => (
         <div key={i} className="chart-tooltip-item">
@@ -90,7 +94,7 @@ function CustomTooltip({
       ))}
       {hourSpots.length > 0 && (
         <div style={{ marginTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
-          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+          <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             📺 Spoty TV:
           </div>
           {hourSpots.map((s, i) => (
@@ -99,23 +103,30 @@ function CustomTooltip({
               style={{
                 fontSize: '0.75rem',
                 color: 'var(--text-secondary)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '2px 0',
+                padding: '4px 0',
+                borderBottom: i < hourSpots.length - 1 ? '1px dashed rgba(255,255,255,0.04)' : 'none',
               }}
             >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: s.color,
-                  flexShrink: 0,
-                }}
-              />
-              {s.station} — {String(s.hour).padStart(2, '0')}:
-              {String(s.minute).padStart(2, '0')} ({s.pasmo})
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--text-primary)' }}>
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: s.color,
+                    flexShrink: 0,
+                  }}
+                />
+                {s.station} — {String(s.hour).padStart(2, '0')}:{String(s.minute).padStart(2, '0')}
+              </div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: 2, paddingLeft: 12 }}>
+                Program: <span style={{ color: 'var(--text-primary)' }}>{s.program || '—'}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 2, fontSize: '0.6875rem', color: 'var(--text-muted)', paddingLeft: 12 }}>
+                <span>Dł: {s.spotLength}s</span>
+                <span>Wer: {s.spotVersion || '—'}</span>
+                <span style={{ color: s.color, fontWeight: 600 }}>{s.pasmo}</span>
+              </div>
             </div>
           ))}
         </div>
