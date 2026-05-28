@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
   });
 
   const formSubmissions = currentConversionEvents
-    .filter((e) => e.eventName.toLowerCase().includes('form'))
+    .filter((e) => e.eventName.toLowerCase().includes('form') || e.eventName.toLowerCase().includes('lead'))
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   const phoneCalls = currentConversionEvents
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
   });
 
   const prevFormSubmissions = prevConversionEvents
-    .filter((e) => e.eventName.toLowerCase().includes('form'))
+    .filter((e) => e.eventName.toLowerCase().includes('form') || e.eventName.toLowerCase().includes('lead'))
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   const prevPhoneCalls = prevConversionEvents

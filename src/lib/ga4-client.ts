@@ -546,7 +546,7 @@ export async function fetchDailyConversions(
         filter: {
           fieldName: "eventName",
           inListFilter: {
-            values: ["form_submission", "phone_call_click"],
+            values: ["form_submission", "phone_call_click", "generate_lead"],
           },
         },
       },
