@@ -136,7 +136,7 @@ function CustomTooltip({
 }
 
 export default function TrendsPage() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('sv-SE');
   const [date, setDate] = useState(today);
   const [showYesterday, setShowYesterday] = useState(false);
   const [showWeekAgo, setShowWeekAgo] = useState(false);

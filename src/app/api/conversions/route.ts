@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
+import { getWarsawNow } from '@/lib/utils';
 
 type Period = 'today' | '7d' | '30d' | '90d';
 
 function getStartDate(period: Period): Date {
-  const now = new Date();
+  const now = getWarsawNow();
+  now.setUTCHours(0, 0, 0, 0);
   switch (period) {
     case 'today':
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return now;
     case '7d':
       return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     case '30d':
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest) {
   }
 
   const startDate = getStartDate(period);
-  const now = new Date();
+  const now = getWarsawNow();
   const days = period === 'today' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 90;
   const prevStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000);
 

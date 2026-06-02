@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { prisma } from "../lib/prisma";
 import { invalidatePattern } from "../lib/redis";
+import { getWarsawNow, getWarsawDateString } from "../lib/utils";
 import {
   fetchRealtimeData,
   fetchDailyTrafficBySource,
@@ -19,15 +20,11 @@ import {
 const CRON_INTERVAL = parseInt(process.env.CRON_INTERVAL_MINUTES || "5", 10);
 
 function ts(): string {
-  return new Date().toISOString();
+  return getWarsawNow().toISOString();
 }
 
 function todayString(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return getWarsawDateString();
 }
 
 // ---------------------------------------------------------------------------
@@ -43,7 +40,7 @@ async function collectRealtime(): Promise<void> {
     // Map GA4 RealtimeData fields to Prisma RealtimeSnapshot schema
     await prisma.realtimeSnapshot.create({
       data: {
-        capturedAt: new Date(),
+        capturedAt: getWarsawNow(),
         activeUsers: data.totalActiveUsers,
         eventCount: data.totalEventCount,
         keyEvents: data.totalKeyEvents,
@@ -64,7 +61,7 @@ async function collectRealtime(): Promise<void> {
 
 async function collectDailyTraffic(): Promise<void> {
   const today = todayString();
-  const now = new Date();
+  const now = getWarsawNow();
   console.log(`[Cron] ${ts()} Collecting daily traffic for ${today}...`);
 
   try {
@@ -79,8 +76,9 @@ async function collectDailyTraffic(): Promise<void> {
       ]);
 
     // Delete today's existing rows and re-insert atomically
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    const [year, month, day] = today.split("-").map(Number);
+    const todayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+    const todayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
     await prisma.$transaction(async (tx) => {
       // Delete today's data
@@ -196,7 +194,7 @@ async function collectDailySummary(): Promise<void> {
       const year = parseInt(dateStr.slice(0, 4));
       const month = parseInt(dateStr.slice(4, 6)) - 1;
       const day = parseInt(dateStr.slice(6, 8));
-      const dateObj = new Date(year, month, day);
+      const dateObj = new Date(Date.UTC(year, month, day, 0, 0, 0));
 
       await prisma.dailySnapshot.upsert({
         where: { date: dateObj },

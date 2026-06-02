@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
+import { getWarsawDateString } from '@/lib/utils';
 
 const PASMO_COLORS: Record<string, string> = {
   day: '#fbbf24',
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const dateStr = searchParams.get('date') || new Date().toISOString().slice(0, 10);
+  const dateStr = searchParams.get('date') || getWarsawDateString();
 
   const cacheKey = `tv-overlay:${dateStr}`;
   const cached = await getCache(cacheKey);
@@ -24,8 +25,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(cached);
   }
 
-  const dayStart = new Date(dateStr + 'T00:00:00');
-  const dayEnd = new Date(dateStr + 'T23:59:59.999');
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const dayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
   const schedule = await prisma.tvSchedule.findMany({
     where: {
@@ -35,8 +37,8 @@ export async function GET(request: NextRequest) {
   });
 
   const spots = schedule.map((s) => {
-    const hour = s.airDate.getHours();
-    const minute = s.airDate.getMinutes();
+    const hour = s.airDate.getUTCHours();
+    const minute = s.airDate.getUTCMinutes();
     const pasmoKey = s.pasmo?.toLowerCase().trim() || '';
     const color = PASMO_COLORS[pasmoKey] || '#3b82f6';
     

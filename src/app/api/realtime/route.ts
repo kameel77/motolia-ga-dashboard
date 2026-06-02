@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
+import { getWarsawNow } from '@/lib/utils';
 
 const PASMO_COLORS: Record<string, string> = {
   day: '#fbbf24',
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     take: 30,
   });
 
-  const now = new Date();
+  const now = getWarsawNow();
   const minutes = history.map((snap) => {
     const diffMs = now.getTime() - new Date(snap.capturedAt).getTime();
     const minutesAgo = Math.max(0, Math.floor(diffMs / 60000));
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  // Query spots in the last 30 minutes relative to server time
+  // Query spots in the last 30 minutes relative to Warsaw time
   const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
   const activeSpots = await prisma.tvSchedule.findMany({
     where: {

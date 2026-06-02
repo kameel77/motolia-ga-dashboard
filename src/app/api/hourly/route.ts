@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
+import { getWarsawDateString } from '@/lib/utils';
 
 function getDayRange(dateStr: string): { start: Date; end: Date } {
   const d = new Date(dateStr + 'T00:00:00');
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const dateStr = searchParams.get('date') || new Date().toISOString().slice(0, 10);
+  const dateStr = searchParams.get('date') || getWarsawDateString();
 
   const cacheKey = `hourly:${dateStr}`;
   const cached = await getCache(cacheKey);
@@ -33,29 +34,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(cached);
   }
 
-  const { start: todayStart, end: todayEnd } = getDayRange(dateStr);
+  const todayPrefix = dateStr.replace(/-/g, '');
+
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const todayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
 
   const yesterdayDate = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
-  const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
-  const { start: yesterdayStart, end: yesterdayEnd } = getDayRange(yesterdayStr);
+  const yesterdayPrefix = getWarsawDateString(yesterdayDate).replace(/-/g, '');
 
   const weekAgoDate = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const weekAgoStr = weekAgoDate.toISOString().slice(0, 10);
-  const { start: weekAgoStart, end: weekAgoEnd } = getDayRange(weekAgoStr);
+  const weekAgoPrefix = getWarsawDateString(weekAgoDate).replace(/-/g, '');
 
   const [todayData, yesterdayData, weekAgoData] = await Promise.all([
     prisma.trafficByHour.findMany({
-      where: { capturedAt: { gte: todayStart, lt: todayEnd } },
+      where: { dateHour: { startsWith: todayPrefix } },
       orderBy: { capturedAt: 'desc' },
       distinct: ['dateHour'],
     }),
     prisma.trafficByHour.findMany({
-      where: { capturedAt: { gte: yesterdayStart, lt: yesterdayEnd } },
+      where: { dateHour: { startsWith: yesterdayPrefix } },
       orderBy: { capturedAt: 'desc' },
       distinct: ['dateHour'],
     }),
     prisma.trafficByHour.findMany({
-      where: { capturedAt: { gte: weekAgoStart, lt: weekAgoEnd } },
+      where: { dateHour: { startsWith: weekAgoPrefix } },
       orderBy: { capturedAt: 'desc' },
       distinct: ['dateHour'],
     }),
@@ -123,10 +125,10 @@ export async function GET(request: NextRequest) {
     const day = parseInt(dh.slice(6, 8));
     const hour = parseInt(dh.slice(8, 10));
 
-    const dateObj = new Date(year, month, day);
+    const dateObj = new Date(Date.UTC(year, month, day));
     if (isNaN(dateObj.getTime())) continue;
 
-    const jsDay = dateObj.getDay(); // 0 = Sunday, 1 = Monday...
+    const jsDay = dateObj.getUTCDay(); // 0 = Sunday, 1 = Monday...
     const dayIndex = jsDay === 0 ? 6 : jsDay - 1; // 0 = Monday, ..., 6 = Sunday
 
     heatmapSum[dayIndex][hour] += row.sessions;

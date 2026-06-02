@@ -27,14 +27,14 @@ function parseDate(dateStr: string, timeStr: string): Date {
   }
   const [day, month, year] = dateStr.split('.');
   const [hours, minutes, seconds] = timeStr.split(':');
-  return new Date(
+  return new Date(Date.UTC(
     parseInt(year) || new Date().getFullYear(),
     (parseInt(month) || 1) - 1,
     parseInt(day) || 1,
     parseInt(hours) || 0,
     parseInt(minutes) || 0,
     parseInt(seconds || '0') || 0
-  );
+  ));
 }
 
 function parseSpotLength(lengthStr: string): number {
@@ -125,8 +125,8 @@ export async function POST(request: NextRequest) {
     if (overwrite) {
       for (const dateStr of uniqueDates) {
         const [day, month, year] = dateStr.split('.');
-        const dayStart = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-        const dayEnd = new Date(parseInt(year), parseInt(month) - 1, parseInt(day) + 1);
+        const dayStart = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0));
+        const dayEnd = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day) + 1, 0, 0, 0));
 
         await prisma.tvSchedule.deleteMany({
           where: {

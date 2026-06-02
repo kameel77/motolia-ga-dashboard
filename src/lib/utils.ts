@@ -58,29 +58,72 @@ export function formatDuration(seconds: number): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * Get current date/time in Europe/Warsaw timezone represented directly in a Date object as UTC clock digits.
+ * This ensures that UTC queries matching this date align exactly with Warsaw local calendar boundaries.
+ */
+export function getWarsawNow(): Date {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Warsaw',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false,
+  });
+  
+  const parts = formatter.formatToParts(new Date());
+  const val = (name: string) => parseInt(parts.find(p => p.type === name)?.value || '0');
+  
+  const hour = val('hour');
+  return new Date(Date.UTC(
+    val('year'),
+    val('month') - 1,
+    val('day'),
+    hour === 24 ? 0 : hour,
+    val('minute'),
+    val('second')
+  ));
+}
+
+/**
+ * Get YYYY-MM-DD date string in Europe/Warsaw timezone.
+ */
+export function getWarsawDateString(date: Date = new Date()): string {
+  const formatter = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Warsaw',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(date);
+}
+
+/**
  * Convert a period string into a start Date.
  * Supported values: 'today', '7d', '30d', '90d'.
  */
 export function getStartDateForPeriod(period: string): Date {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
+  const now = getWarsawNow();
+  now.setUTCHours(0, 0, 0, 0);
 
   switch (period) {
     case "today":
       return now;
     case "7d": {
       const d = new Date(now);
-      d.setDate(d.getDate() - 7);
+      d.setUTCDate(d.getUTCDate() - 7);
       return d;
     }
     case "30d": {
       const d = new Date(now);
-      d.setDate(d.getDate() - 30);
+      d.setUTCDate(d.getUTCDate() - 30);
       return d;
     }
     case "90d": {
       const d = new Date(now);
-      d.setDate(d.getDate() - 90);
+      d.setUTCDate(d.getUTCDate() - 90);
       return d;
     }
     default:
@@ -112,7 +155,7 @@ export function parseTvCsvRow(
     throw new Error(`Invalid date format: "${row["Data"]}" (expected DD.MM.YYYY)`);
   }
   const [day, month, year] = dateParts.map(Number);
-  const dateOnly = new Date(year, month - 1, day);
+  const dateOnly = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
 
   // Parse time: HH:mm:ss and combine with date
   const timeParts = (row["Godzina planowana"] || "").split(":");
@@ -122,7 +165,7 @@ export function parseTvCsvRow(
     );
   }
   const [hours, minutes, seconds] = timeParts.map(Number);
-  const fullDateTime = new Date(year, month - 1, day, hours, minutes, seconds || 0);
+  const fullDateTime = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds || 0));
 
   // Parse duration: e.g. "39'" → 39 seconds
   const dlugoscRaw = (row["Długość"] || "").replace(/'/g, "").trim();
