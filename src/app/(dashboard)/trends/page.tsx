@@ -59,13 +59,10 @@ const PASMO_COLORS: Record<string, string> = {
 const DAYS = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'];
 
 function getNearest30MinBucket(hour: number, minute: number): { hour: number; minute: number } {
-  if (minute < 15) {
-    return { hour, minute: 0 };
-  } else if (minute < 45) {
-    return { hour, minute: 30 };
-  } else {
-    return { hour: (hour + 1) % 24, minute: 0 };
-  }
+  return {
+    hour,
+    minute: minute < 30 ? 0 : 30
+  };
 }
 
 function formatHour(h: number): string {

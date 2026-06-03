@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
-import { getWarsawDateString } from '@/lib/utils';
+import { getWarsawDateString, getWarsawNow } from '@/lib/utils';
 
 function getDayRange(dateStr: string): { start: Date; end: Date } {
   const d = new Date(dateStr + 'T00:00:00');
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   const weekAgoDate = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weekAgoPrefix = getWarsawDateString(weekAgoDate).replace(/-/g, '');
 
-  const [todayData, yesterdayData, weekAgoData] = await Promise.all([
+  const [todayData, yesterdayData, weekAgoData, realtimeSnapshots] = await Promise.all([
     prisma.trafficByHour.findMany({
       where: { dateHour: { startsWith: todayPrefix } },
       orderBy: { capturedAt: 'desc' },
@@ -60,6 +60,15 @@ export async function GET(request: NextRequest) {
       where: { dateHour: { startsWith: weekAgoPrefix } },
       orderBy: { capturedAt: 'desc' },
       distinct: ['dateHour'],
+    }),
+    prisma.realtimeSnapshot.findMany({
+      where: {
+        capturedAt: {
+          gte: todayStart,
+          lt: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
+        },
+      },
+      orderBy: { capturedAt: 'asc' },
     }),
   ]);
 
@@ -86,6 +95,27 @@ export async function GET(request: NextRequest) {
     if (!weekAgoMap.has(key)) weekAgoMap.set(key, row);
   }
 
+  const getSnapshotIntervalKey = (date: Date) => {
+    const h = date.getUTCHours();
+    const m = date.getUTCMinutes();
+    const roundedM = m < 30 ? '00' : '30';
+    return `${h.toString().padStart(2, '0')}${roundedM}`;
+  };
+
+  const realtimeMap = new Map<string, { activeUsers: number; keyEvents: number }>();
+  for (const snap of realtimeSnapshots) {
+    const key = getSnapshotIntervalKey(snap.capturedAt);
+    realtimeMap.set(key, {
+      activeUsers: snap.activeUsers,
+      keyEvents: snap.keyEvents,
+    });
+  }
+
+  const warsawNow = getWarsawNow();
+  const currentHour = warsawNow.getUTCHours();
+  const currentMinute = warsawNow.getUTCMinutes();
+  const isToday = dateStr === getWarsawDateString();
+
   const points = [];
   for (let i = 0; i < 48; i++) {
     const h = Math.floor(i / 2);
@@ -95,16 +125,41 @@ export async function GET(request: NextRequest) {
     const key = `${hourStr}${minuteStr}`;
     const label = `${hourStr}:${minuteStr}`;
 
-    const today = todayMap.get(key);
+    const todayReport = todayMap.get(key);
     const yesterday = yesterdayMap.get(key);
     const weekAgo = weekAgoMap.get(key);
+
+    const isFuture = isToday && (h > currentHour || (h === currentHour && m > currentMinute));
+    const isRecent = isToday && (currentHour * 60 + currentMinute - (h * 60 + m) <= 180);
+
+    let sessions: number | null = null;
+    let conversions: number | null = null;
+
+    if (!isFuture) {
+      if (todayReport && todayReport.sessions > 0) {
+        sessions = todayReport.sessions;
+        conversions = todayReport.conversions;
+      } else if (isRecent) {
+        const rt = realtimeMap.get(key);
+        if (rt) {
+          sessions = rt.activeUsers;
+          conversions = rt.keyEvents;
+        } else {
+          sessions = 0;
+          conversions = 0;
+        }
+      } else {
+        sessions = 0;
+        conversions = 0;
+      }
+    }
 
     points.push({
       hour: h,
       minute: m,
       label,
-      sessions: today?.sessions ?? 0,
-      conversions: today?.conversions ?? 0,
+      sessions,
+      conversions,
       sessionsYesterday: yesterday?.sessions ?? 0,
       sessionsWeekAgo: weekAgo?.sessions ?? 0,
     });
