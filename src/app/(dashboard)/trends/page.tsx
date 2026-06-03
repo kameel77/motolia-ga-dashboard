@@ -58,6 +58,16 @@ const PASMO_COLORS: Record<string, string> = {
 
 const DAYS = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'];
 
+function getNearest30MinBucket(hour: number, minute: number): { hour: number; minute: number } {
+  if (minute < 15) {
+    return { hour, minute: 0 };
+  } else if (minute < 45) {
+    return { hour, minute: 30 };
+  } else {
+    return { hour: (hour + 1) % 24, minute: 0 };
+  }
+}
+
 function formatHour(h: number): string {
   return `${String(h).padStart(2, '0')}:00`;
 }
@@ -74,12 +84,16 @@ function CustomTooltip({
   spots?: TVSpot[];
 }) {
   if (!active || !payload?.length) return null;
-  const hour = typeof label === 'string' ? parseInt(label) : label;
-  const hourSpots = spots?.filter((s) => s.hour === hour) ?? [];
+  
+  const hourSpots = spots?.filter((s) => {
+    const bucket = getNearest30MinBucket(s.hour, s.minute);
+    const labelParts = String(label).split(':').map(Number);
+    return bucket.hour === labelParts[0] && bucket.minute === labelParts[1];
+  }) ?? [];
 
   return (
     <div className="chart-tooltip" style={{ minWidth: 180, maxWidth: 280 }}>
-      <div className="chart-tooltip-label">{formatHour(Number(hour))}</div>
+      <div className="chart-tooltip-label">{label}</div>
       {payload.map((entry, i) => (
         <div key={i} className="chart-tooltip-item">
           <span
@@ -162,9 +176,9 @@ export default function TrendsPage() {
 
   const chartData = useMemo(
     () =>
-      (hourly?.points ?? []).map((p) => ({
+      (hourly?.points ?? []).map((p: any) => ({
         hour: p.hour,
-        name: formatHour(p.hour),
+        name: p.label,
         Sesje: p.sessions,
         Konwersje: p.conversions,
         ...(showYesterday && p.sessionsYesterday !== undefined
@@ -221,7 +235,7 @@ export default function TrendsPage() {
             Trendy & TV
           </h1>
           <p className="page-subtitle">
-            Godzinowy timeline z nakładką spotów TV
+            Analityka ruchu w trakcie dnia
           </p>
         </div>
       </div>
@@ -295,7 +309,7 @@ export default function TrendsPage() {
       {/* Main Hourly Chart */}
       <div className="trends-main-chart">
         <div className="trends-chart-title">
-          Godzinowy ruch — {date}
+          Ruch w ciągu dnia — {date}
         </div>
         {loading ? (
           <div
@@ -340,16 +354,20 @@ export default function TrendsPage() {
               />
 
               {/* TV Spot Reference Lines */}
-              {spots.map((spot, i) => (
-                <ReferenceLine
-                  key={i}
-                  x={formatHour(spot.hour)}
-                  stroke={spot.color || PASMO_COLORS[spot.pasmo] || '#fbbf24'}
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  strokeOpacity={0.6}
-                />
-              ))}
+              {spots.map((spot, i) => {
+                const bucket = getNearest30MinBucket(spot.hour, spot.minute);
+                const bucketLabel = `${String(bucket.hour).padStart(2, '0')}:${String(bucket.minute).padStart(2, '0')}`;
+                return (
+                  <ReferenceLine
+                    key={i}
+                    x={bucketLabel}
+                    stroke={spot.color || PASMO_COLORS[spot.pasmo] || '#fbbf24'}
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    strokeOpacity={0.6}
+                  />
+                );
+              })}
 
               <Area
                 type="monotone"

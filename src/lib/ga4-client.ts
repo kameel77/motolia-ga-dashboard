@@ -378,13 +378,13 @@ export async function fetchDailyTrafficByHour(
   const client = getClient();
   const property = getProperty();
 
-  console.log(`[GA4] Fetching traffic by hour for ${date}...`);
+  console.log(`[GA4] Fetching traffic by hour and minute for ${date}...`);
 
   try {
     const [response] = await client.runReport({
       property,
       dateRanges: [{ startDate: date, endDate: date }],
-      dimensions: [{ name: "dateHour" }],
+      dimensions: [{ name: "dateHourMinute" }],
       metrics: [
         { name: "sessions" },
         { name: "totalUsers" },
@@ -393,11 +393,36 @@ export async function fetchDailyTrafficByHour(
       returnPropertyQuota: true,
     });
 
-    return (response.rows || []).map((row) => ({
-      dateHour: safeString(row.dimensionValues?.[0]?.value),
-      sessions: safeNumber(row.metricValues?.[0]?.value),
-      totalUsers: safeNumber(row.metricValues?.[1]?.value),
-      conversions: safeNumber(row.metricValues?.[2]?.value),
+    const aggregated = new Map<string, { sessions: number; totalUsers: number; conversions: number }>();
+    
+    for (const row of response.rows || []) {
+      const dateHourMinute = safeString(row.dimensionValues?.[0]?.value); // "YYYYMMDDHHMM"
+      if (dateHourMinute.length < 12) continue;
+      
+      const dateHour = dateHourMinute.slice(0, 10); // "YYYYMMDDHH"
+      const minuteVal = parseInt(dateHourMinute.slice(10, 12), 10);
+      const roundedMinute = minuteVal < 30 ? "00" : "30";
+      const key = `${dateHour}${roundedMinute}`;
+      
+      const sessions = safeNumber(row.metricValues?.[0]?.value);
+      const totalUsers = safeNumber(row.metricValues?.[1]?.value);
+      const conversions = safeNumber(row.metricValues?.[2]?.value);
+      
+      const existing = aggregated.get(key);
+      if (existing) {
+        existing.sessions += sessions;
+        existing.totalUsers += totalUsers;
+        existing.conversions += conversions;
+      } else {
+        aggregated.set(key, { sessions, totalUsers, conversions });
+      }
+    }
+
+    return Array.from(aggregated.entries()).map(([key, val]) => ({
+      dateHour: key,
+      sessions: val.sessions,
+      totalUsers: val.totalUsers,
+      conversions: val.conversions,
     }));
   } catch (err) {
     console.error("[GA4] fetchDailyTrafficByHour error:", err);

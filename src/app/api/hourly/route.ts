@@ -63,35 +63,46 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  const extractHour = (dateHour: string) => dateHour.slice(-2);
+  const getHourMinuteKey = (dh: string) => {
+    if (dh.length === 10) return dh.slice(-2) + '00';
+    return dh.slice(-4); // "HHMM"
+  };
 
   const todayMap = new Map<string, (typeof todayData)[0]>();
   for (const row of todayData) {
-    const hour = extractHour(row.dateHour);
-    if (!todayMap.has(hour)) todayMap.set(hour, row);
+    const key = getHourMinuteKey(row.dateHour);
+    if (!todayMap.has(key)) todayMap.set(key, row);
   }
 
   const yesterdayMap = new Map<string, (typeof yesterdayData)[0]>();
   for (const row of yesterdayData) {
-    const hour = extractHour(row.dateHour);
-    if (!yesterdayMap.has(hour)) yesterdayMap.set(hour, row);
+    const key = getHourMinuteKey(row.dateHour);
+    if (!yesterdayMap.has(key)) yesterdayMap.set(key, row);
   }
 
   const weekAgoMap = new Map<string, (typeof weekAgoData)[0]>();
   for (const row of weekAgoData) {
-    const hour = extractHour(row.dateHour);
-    if (!weekAgoMap.has(hour)) weekAgoMap.set(hour, row);
+    const key = getHourMinuteKey(row.dateHour);
+    if (!weekAgoMap.has(key)) weekAgoMap.set(key, row);
   }
 
   const points = [];
-  for (let h = 0; h < 24; h++) {
+  for (let i = 0; i < 48; i++) {
+    const h = Math.floor(i / 2);
+    const m = (i % 2) * 30;
     const hourStr = h.toString().padStart(2, '0');
-    const today = todayMap.get(hourStr);
-    const yesterday = yesterdayMap.get(hourStr);
-    const weekAgo = weekAgoMap.get(hourStr);
+    const minuteStr = m.toString().padStart(2, '0');
+    const key = `${hourStr}${minuteStr}`;
+    const label = `${hourStr}:${minuteStr}`;
+
+    const today = todayMap.get(key);
+    const yesterday = yesterdayMap.get(key);
+    const weekAgo = weekAgoMap.get(key);
 
     points.push({
       hour: h,
+      minute: m,
+      label,
       sessions: today?.sessions ?? 0,
       conversions: today?.conversions ?? 0,
       sessionsYesterday: yesterday?.sessions ?? 0,
