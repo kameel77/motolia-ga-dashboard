@@ -243,7 +243,7 @@ async function invalidateCache(): Promise<void> {
 // Full collection cycle
 // ---------------------------------------------------------------------------
 
-async function runCollectionCycle(): Promise<void> {
+export async function runCollectionCycle(): Promise<void> {
   const start = Date.now();
   console.log(`\n[Cron] ========== Collection cycle start: ${ts()} ==========`);
 
