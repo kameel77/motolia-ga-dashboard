@@ -4,6 +4,7 @@ const PUBLIC_PATHS = [
   '/login',
   '/api/auth/login',
   '/api/health',
+  '/api/sync',
   '/_next',
   '/favicon.ico',
 ];
