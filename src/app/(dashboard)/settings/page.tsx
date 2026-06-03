@@ -32,6 +32,39 @@ export default function SettingsPage() {
   const [logs, setLogs] = useState<ImportLog[]>([]);
   const [overwrite, setOverwrite] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
+  
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncStatus(null);
+    try {
+      const res = await fetch('/api/sync');
+      if (res.ok) {
+        setSyncStatus({
+          type: 'success',
+          message: 'Dane zostały pomyślnie zsynchronizowane z Google Analytics 4!',
+        });
+      } else {
+        const err = await res.json();
+        setSyncStatus({
+          type: 'error',
+          message: `Błąd: ${err.error || err.details || 'Nieznany błąd'}`,
+        });
+      }
+    } catch {
+      setSyncStatus({
+        type: 'error',
+        message: 'Błąd połączenia z serwerem podczas synchronizacji.',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -418,6 +451,32 @@ export default function SettingsPage() {
                 </span>
               </span>
             </div>
+          </div>
+          <div style={{ marginTop: 24, borderTop: '1px solid var(--border-color)', paddingTop: 20 }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleSync}
+              disabled={syncing}
+              style={{ width: '100%', background: 'var(--gradient-blue)', border: 'none' }}
+            >
+              {syncing ? (
+                <>
+                  <span className="spinner" style={{ marginRight: 8 }} /> Synchronizacja...
+                </>
+              ) : (
+                '🔄 Synchronizuj dane teraz (GA4)'
+              )}
+            </button>
+
+            {syncStatus && (
+              <div
+                className={`settings-status ${syncStatus.type === 'error' ? 'error' : ''}`}
+                style={{ marginTop: 12, padding: '10px 12px' }}
+              >
+                <span>{syncStatus.type === 'success' ? '✅' : '❌'}</span>
+                {syncStatus.message}
+              </div>
+            )}
           </div>
         </div>
       </div>
