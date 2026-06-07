@@ -153,3 +153,61 @@ model ImportLog {
 
   @@map("import_logs")
 }
+
+enum CrmLeadStatus {
+  NEW
+  IN_PROGRESS
+  OFFER
+  WON
+  LOST
+}
+
+enum CrmLeadSource {
+  PHONE
+  EMAIL
+  WEB_FORM
+}
+
+model CrmLead {
+  id              String         @id
+  clientName      String         @default("Klient Anonimowy")
+  clientEmail     String?
+  clientPhone     String?
+  source          CrmLeadSource
+  status          CrmLeadStatus  @default(NEW)
+  thuliumStatus   String         // Nazwa statusu z Thulium (np. "Nowy", "Otwarty", "Zamknięty")
+  queueName       String?        // Kolejka z Thulium (np. "Formularz_kontaktowy")
+  subject         String?        // Temat zgłoszenia
+  agentName       String?        // Nazwa przypisanego agenta
+  value           Float          @default(0.0)
+  url             String?        // Adres URL oferty/pojazdu
+  referrer        String?        // Referrer (np. google, facebook)
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  thuliumCreatedAt DateTime
+  thuliumUpdatedAt DateTime
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([status])
+  @@index([thuliumCreatedAt])
+  @@map("crm_leads")
+}
+
+model CrmCall {
+  id           String    @id
+  phone        String
+  direction    String    // "INBOUND" | "OUTBOUND"
+  disposition  String    // "ANSWERED" | "NO_ANSWER" | "BUSY" etc.
+  duration     Int
+  billsec      Int
+  agentName    String?
+  queueName    String?
+  timestamp    DateTime  // Data połączenia
+  createdAt    DateTime  @default(now())
+
+  @@index([timestamp])
+  @@map("crm_calls")
+}
+

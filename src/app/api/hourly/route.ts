@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
 
   const [year, month, day] = dateStr.split('-').map(Number);
   const todayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
   const yesterdayDate = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
   const yesterdayPrefix = getWarsawDateString(yesterdayDate).replace(/-/g, '');
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
   const weekAgoDate = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weekAgoPrefix = getWarsawDateString(weekAgoDate).replace(/-/g, '');
 
-  const [todayData, yesterdayData, weekAgoData, realtimeSnapshots] = await Promise.all([
+  const [todayData, yesterdayData, weekAgoData, realtimeSnapshots, crmCalls, crmLeads] = await Promise.all([
     prisma.trafficByHour.findMany({
       where: { dateHour: { startsWith: todayPrefix } },
       orderBy: { capturedAt: 'desc' },
@@ -65,10 +66,27 @@ export async function GET(request: NextRequest) {
       where: {
         capturedAt: {
           gte: todayStart,
-          lt: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
+          lt: todayEnd,
         },
       },
       orderBy: { capturedAt: 'asc' },
+    }),
+    prisma.crmCall.findMany({
+      where: {
+        timestamp: {
+          gte: todayStart,
+          lt: todayEnd,
+        },
+        disposition: 'ANSWERED',
+      },
+    }),
+    prisma.crmLead.findMany({
+      where: {
+        thuliumCreatedAt: {
+          gte: todayStart,
+          lt: todayEnd,
+        },
+      },
     }),
   ]);
 
@@ -154,6 +172,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const crmCallsCount = crmCalls.filter(c => {
+      const callTime = new Date(c.timestamp);
+      const ch = callTime.getUTCHours();
+      const cm = callTime.getUTCMinutes();
+      return ch === h && cm >= m && cm < m + 30;
+    }).length;
+
+    const crmLeadsCount = crmLeads.filter(l => {
+      const leadTime = new Date(l.thuliumCreatedAt);
+      const lh = leadTime.getUTCHours();
+      const lm = leadTime.getUTCMinutes();
+      return lh === h && lm >= m && lm < m + 30;
+    }).length;
+
     points.push({
       hour: h,
       minute: m,
@@ -162,6 +194,8 @@ export async function GET(request: NextRequest) {
       conversions,
       sessionsYesterday: yesterday?.sessions ?? 0,
       sessionsWeekAgo: weekAgo?.sessions ?? 0,
+      crmCalls: crmCallsCount,
+      crmLeads: crmLeadsCount,
     });
   }
 

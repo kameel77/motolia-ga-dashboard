@@ -52,6 +52,17 @@ const mainNavItems: NavItem[] = [
     label: 'Trendy & TV',
     href: '/trends',
   },
+  {
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <polyline points="16 11 18 13 22 9" />
+      </svg>
+    ),
+    label: 'CRM Leady',
+    href: '/leads',
+  },
 ];
 
 const analysisNavItems: NavItem[] = [

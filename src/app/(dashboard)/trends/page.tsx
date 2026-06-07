@@ -151,6 +151,8 @@ export default function TrendsPage() {
   const [date, setDate] = useState(today);
   const [showYesterday, setShowYesterday] = useState(false);
   const [showWeekAgo, setShowWeekAgo] = useState(false);
+  const [showCalls, setShowCalls] = useState(true);
+  const [showLeads, setShowLeads] = useState(true);
   const [hourly, setHourly] = useState<HourlyData | null>(null);
   const [tvData, setTvData] = useState<TVOverlayData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -184,8 +186,10 @@ export default function TrendsPage() {
         ...(showWeekAgo && p.sessionsWeekAgo !== undefined
           ? { 'Tydzień temu': p.sessionsWeekAgo }
           : {}),
+        ...(showCalls ? { 'Telefony CRM': p.crmCalls ?? 0 } : {}),
+        ...(showLeads ? { 'Formularze CRM': p.crmLeads ?? 0 } : {}),
       })),
-    [hourly, showYesterday, showWeekAgo]
+    [hourly, showYesterday, showWeekAgo, showCalls, showLeads]
   );
 
   const spots = tvData?.spots ?? [];
@@ -258,6 +262,26 @@ export default function TrendsPage() {
           >
             Tydzień temu
           </button>
+          <button
+            className={`trends-toggle ${showCalls ? 'active' : ''}`}
+            onClick={() => setShowCalls(!showCalls)}
+            style={{ 
+              borderColor: showCalls ? 'var(--accent-cyan)' : 'var(--border-color)', 
+              color: showCalls ? 'var(--text-primary)' : 'var(--text-secondary)'
+            }}
+          >
+            ☎️ Telefony CRM
+          </button>
+          <button
+            className={`trends-toggle ${showLeads ? 'active' : ''}`}
+            onClick={() => setShowLeads(!showLeads)}
+            style={{ 
+              borderColor: showLeads ? 'var(--accent-purple)' : 'var(--border-color)', 
+              color: showLeads ? 'var(--text-primary)' : 'var(--text-secondary)'
+            }}
+          >
+            🎯 Formularze CRM
+          </button>
         </div>
       </div>
 
@@ -277,6 +301,24 @@ export default function TrendsPage() {
           />
           Konwersje
         </div>
+        {showCalls && (
+          <div className="trends-legend-item">
+            <div
+              className="trends-legend-line"
+              style={{ background: '#06b6d4' }}
+            />
+            Telefony CRM
+          </div>
+        )}
+        {showLeads && (
+          <div className="trends-legend-item">
+            <div
+              className="trends-legend-line"
+              style={{ background: '#8b5cf6' }}
+            />
+            Formularze CRM
+          </div>
+        )}
         {showYesterday && (
           <div className="trends-legend-item">
             <div
@@ -385,27 +427,49 @@ export default function TrendsPage() {
                 activeDot={{ r: 4, fill: '#10b981', stroke: 'var(--bg-card)', strokeWidth: 2 }}
               />
 
-              {showYesterday && (
+              {showCalls && (
                 <Line
                   type="monotone"
-                  dataKey="Wczoraj"
-                  stroke="#8b8fa3"
-                  strokeWidth={1.5}
-                  strokeDasharray="6 4"
+                  dataKey="Telefony CRM"
+                  stroke="#06b6d4"
+                  strokeWidth={2}
                   dot={false}
+                  activeDot={{ r: 4, fill: '#06b6d4', stroke: 'var(--bg-card)', strokeWidth: 2 }}
                 />
               )}
 
-              {showWeekAgo && (
+              {showLeads && (
                 <Line
                   type="monotone"
-                  dataKey="Tydzień temu"
-                  stroke="#5c6070"
-                  strokeWidth={1.5}
-                  strokeDasharray="6 4"
+                  dataKey="Formularze CRM"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
                   dot={false}
+                  activeDot={{ r: 4, fill: '#8b5cf6', stroke: 'var(--bg-card)', strokeWidth: 2 }}
                 />
               )}
+ 
+               {showYesterday && (
+                 <Line
+                   type="monotone"
+                   dataKey="Wczoraj"
+                   stroke="#8b8fa3"
+                   strokeWidth={1.5}
+                   strokeDasharray="6 4"
+                   dot={false}
+                 />
+               )}
+ 
+               {showWeekAgo && (
+                 <Line
+                   type="monotone"
+                   dataKey="Tydzień temu"
+                   stroke="#5c6070"
+                   strokeWidth={1.5}
+                   strokeDasharray="6 4"
+                   dot={false}
+                 />
+               )}
             </ComposedChart>
           </ResponsiveContainer>
         )}

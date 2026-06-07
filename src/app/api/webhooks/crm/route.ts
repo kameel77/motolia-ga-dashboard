@@ -1,0 +1,216 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+export async function POST(request: NextRequest) {
+  // 1. Basic Token Auth
+  const authHeader = request.headers.get('authorization');
+  const expectedToken = `Bearer ${process.env.GA_ANALYTICS_API_KEY || 'test-analytics-key'}`;
+  
+  if (!authHeader || authHeader !== expectedToken) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { type } = body;
+
+    if (type === 'lead') {
+      const { lead } = body;
+      if (!lead || !lead.id) {
+        return NextResponse.json({ error: 'Invalid lead payload' }, { status: 400 });
+      }
+
+      const thuliumCreatedAt = new Date(lead.thuliumCreatedAt);
+      const thuliumUpdatedAt = new Date(lead.thuliumUpdatedAt);
+
+      // Check if lead already exists
+      const existingLead = await prisma.crmLead.findUnique({
+        where: { id: lead.id }
+      });
+
+      // Upsert lead
+      await prisma.crmLead.upsert({
+        where: { id: lead.id },
+        create: {
+          id: lead.id,
+          clientName: lead.clientName || 'Klient Anonimowy',
+          clientEmail: lead.clientEmail || null,
+          clientPhone: lead.clientPhone || null,
+          source: lead.source, // PHONE | EMAIL | WEB_FORM
+          status: lead.status || 'NEW',
+          thuliumStatus: lead.thuliumStatus || 'Nowy',
+          queueName: lead.queueName || null,
+          subject: lead.subject || null,
+          agentName: lead.agentName || null,
+          value: Number(lead.value || 0.0),
+          url: lead.url || null,
+          referrer: lead.referrer || null,
+          utmSource: lead.utmSource || null,
+          utmMedium: lead.utmMedium || null,
+          utmCampaign: lead.utmCampaign || null,
+          thuliumCreatedAt,
+          thuliumUpdatedAt,
+        },
+        update: {
+          clientName: lead.clientName || 'Klient Anonimowy',
+          clientEmail: lead.clientEmail || null,
+          clientPhone: lead.clientPhone || null,
+          source: lead.source,
+          status: lead.status || 'NEW',
+          thuliumStatus: lead.thuliumStatus || 'Nowy',
+          queueName: lead.queueName || null,
+          subject: lead.subject || null,
+          agentName: lead.agentName || null,
+          value: Number(lead.value || 0.0),
+          url: lead.url || null,
+          referrer: lead.referrer || null,
+          utmSource: lead.utmSource || null,
+          utmMedium: lead.utmMedium || null,
+          utmCampaign: lead.utmCampaign || null,
+          thuliumUpdatedAt,
+        }
+      });
+
+      // Track conversion only on initial creation
+      if (!existingLead) {
+        const capturedAt = new Date(thuliumCreatedAt);
+        capturedAt.setUTCSeconds(0, 0);
+        capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
+
+        const dateHour = `${capturedAt.getUTCFullYear()}${String(capturedAt.getUTCMonth() + 1).padStart(2, '0')}${String(capturedAt.getUTCDate()).padStart(2, '0')}${String(capturedAt.getUTCHours()).padStart(2, '0')}${capturedAt.getUTCMinutes() < 30 ? '00' : '30'}`;
+        const eventName = lead.source === 'PHONE' ? 'phone_call' : 'form_submission';
+
+        // 1. Increment TrafficByHour conversions
+        const trafficRow = await prisma.trafficByHour.findFirst({
+          where: { dateHour }
+        });
+
+        if (trafficRow) {
+          await prisma.trafficByHour.update({
+            where: { id: trafficRow.id },
+            data: { conversions: { increment: 1 } }
+          });
+        } else {
+          await prisma.trafficByHour.create({
+            data: {
+              capturedAt,
+              dateHour,
+              sessions: 0,
+              users: 0,
+              conversions: 1
+            }
+          });
+        }
+
+        // 2. Add to ConversionEvent
+        await prisma.conversionEvent.create({
+          data: {
+            capturedAt,
+            eventName,
+            source: lead.utmSource || 'crm_connector',
+            medium: lead.utmMedium || (lead.source === 'PHONE' ? 'phone' : 'web'),
+            count: 1
+          }
+        });
+      }
+
+      return NextResponse.json({ success: true, message: 'Lead synchronized' });
+
+    } else if (type === 'call') {
+      const { call } = body;
+      if (!call || !call.id) {
+        return NextResponse.json({ error: 'Invalid call payload' }, { status: 400 });
+      }
+
+      const timestamp = new Date(call.timestamp);
+
+      // Check if call already exists
+      const existingCall = await prisma.crmCall.findUnique({
+        where: { id: call.id }
+      });
+
+      if (!existingCall) {
+        // Create new call record
+        await prisma.crmCall.create({
+          data: {
+            id: call.id,
+            phone: call.phone,
+            direction: call.direction,
+            disposition: call.disposition,
+            duration: Number(call.duration || 0),
+            billsec: Number(call.billsec || 0),
+            agentName: call.agentName || null,
+            queueName: call.queueName || null,
+            timestamp,
+          }
+        });
+
+        // Record conversion for answered calls
+        if (call.disposition === 'ANSWERED') {
+          const capturedAt = new Date(timestamp);
+          capturedAt.setUTCSeconds(0, 0);
+          capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
+
+          const dateHour = `${capturedAt.getUTCFullYear()}${String(capturedAt.getUTCMonth() + 1).padStart(2, '0')}${String(capturedAt.getUTCDate()).padStart(2, '0')}${String(capturedAt.getUTCHours()).padStart(2, '0')}${capturedAt.getUTCMinutes() < 30 ? '00' : '30'}`;
+
+          // Increment TrafficByHour conversions
+          const trafficRow = await prisma.trafficByHour.findFirst({
+            where: { dateHour }
+          });
+
+          if (trafficRow) {
+            await prisma.trafficByHour.update({
+              where: { id: trafficRow.id },
+              data: { conversions: { increment: 1 } }
+            });
+          } else {
+            await prisma.trafficByHour.create({
+              data: {
+                capturedAt,
+                dateHour,
+                sessions: 0,
+                users: 0,
+                conversions: 1
+              }
+            });
+          }
+
+          // Add to ConversionEvent
+          await prisma.conversionEvent.create({
+            data: {
+              capturedAt,
+              eventName: 'phone_call',
+              source: 'crm_connector',
+              medium: 'phone',
+              count: 1
+            }
+          });
+        }
+      } else {
+        // Update existing call details (e.g. disposition update)
+        await prisma.crmCall.update({
+          where: { id: call.id },
+          data: {
+            phone: call.phone,
+            direction: call.direction,
+            disposition: call.disposition,
+            duration: Number(call.duration || 0),
+            billsec: Number(call.billsec || 0),
+            agentName: call.agentName || null,
+            queueName: call.queueName || null,
+            timestamp,
+          }
+        });
+      }
+
+      return NextResponse.json({ success: true, message: 'Call synchronized' });
+
+    } else {
+      return NextResponse.json({ error: 'Unknown event type' }, { status: 400 });
+    }
+
+  } catch (err: any) {
+    console.error('Webhook error:', err);
+    return NextResponse.json({ error: 'Internal server error', details: err.message }, { status: 500 });
+  }
+}
