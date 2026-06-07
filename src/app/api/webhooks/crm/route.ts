@@ -1,5 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { CrmLeadStatus } from '@prisma/client';
+
+function parseWarsawDate(dateStr: string | null | undefined): Date {
+  if (!dateStr) return new Date();
+  const isoStr = dateStr.replace(" ", "T");
+  if (isoStr.includes("Z") || isoStr.includes("+") || (isoStr.includes("-") && isoStr.split("-").length > 3)) {
+    return new Date(dateStr);
+  }
+  
+  const dateObj = new Date(isoStr + "Z");
+  try {
+    const tzString = dateObj.toLocaleString("en-US", { timeZone: "Europe/Warsaw" });
+    const localDate = new Date(tzString);
+    const diffMs = localDate.getTime() - dateObj.getTime();
+    return new Date(new Date(isoStr + "Z").getTime() - diffMs);
+  } catch (e) {
+    const month = dateObj.getUTCMonth() + 1;
+    const offset = (month >= 4 && month <= 10) ? "+02:00" : "+01:00";
+    return new Date(isoStr + offset);
+  }
+}
+
+function mapThuliumStatus(statusName: string | null): CrmLeadStatus {
+  if (!statusName) return CrmLeadStatus.NEW;
+  const s = statusName.toLowerCase();
+  
+  if (
+    s.includes("odrzucon") || 
+    s.includes("przegran") || 
+    s.includes("lost") || 
+    s.includes("spam") || 
+    s.includes("anulowan") ||
+    s.includes("rezygnac") ||
+    s.includes("bez powodzenia")
+  ) {
+    return CrmLeadStatus.LOST;
+  }
+  
+  if (
+    s.includes("wygran") || 
+    s.includes("sukces") || 
+    s.includes("sprzedan") || 
+    s.includes("zaakceptowane") ||
+    s.includes("won") ||
+    (s.includes("zamkni") || s.includes("zamknięty"))
+  ) {
+    return CrmLeadStatus.WON;
+  }
+  
+  if (
+    s.includes("oferta") || 
+    s.includes("offer") || 
+    s.includes("wycen")
+  ) {
+    return CrmLeadStatus.OFFER;
+  }
+  
+  if (
+    s.includes("otwarty") || 
+    s.includes("kontakt") || 
+    s.includes("proces") || 
+    s.includes("bieżąc") ||
+    s.includes("toku") ||
+    s.includes("podjęt")
+  ) {
+    return CrmLeadStatus.IN_PROGRESS;
+  }
+  
+  if (s.includes("nowy") || s.includes("nowe")) {
+    return CrmLeadStatus.NEW;
+  }
+  
+  return CrmLeadStatus.NEW;
+}
 
 export async function POST(request: NextRequest) {
   // 1. Basic Token Auth
@@ -20,8 +94,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid lead payload' }, { status: 400 });
       }
 
-      const thuliumCreatedAt = new Date(lead.thuliumCreatedAt);
-      const thuliumUpdatedAt = new Date(lead.thuliumUpdatedAt);
+      const thuliumCreatedAt = parseWarsawDate(lead.thuliumCreatedAt);
+      const thuliumUpdatedAt = parseWarsawDate(lead.thuliumUpdatedAt);
+      const mappedStatus = mapThuliumStatus(lead.thuliumStatus || lead.status || 'Nowy');
 
       // Check if lead already exists
       const existingLead = await prisma.crmLead.findUnique({
@@ -37,7 +112,7 @@ export async function POST(request: NextRequest) {
           clientEmail: lead.clientEmail || null,
           clientPhone: lead.clientPhone || null,
           source: lead.source, // PHONE | EMAIL | WEB_FORM
-          status: lead.status || 'NEW',
+          status: mappedStatus,
           thuliumStatus: lead.thuliumStatus || 'Nowy',
           queueName: lead.queueName || null,
           subject: lead.subject || null,
@@ -56,7 +131,7 @@ export async function POST(request: NextRequest) {
           clientEmail: lead.clientEmail || null,
           clientPhone: lead.clientPhone || null,
           source: lead.source,
-          status: lead.status || 'NEW',
+          status: mappedStatus,
           thuliumStatus: lead.thuliumStatus || 'Nowy',
           queueName: lead.queueName || null,
           subject: lead.subject || null,
@@ -67,6 +142,7 @@ export async function POST(request: NextRequest) {
           utmSource: lead.utmSource || null,
           utmMedium: lead.utmMedium || null,
           utmCampaign: lead.utmCampaign || null,
+          thuliumCreatedAt,
           thuliumUpdatedAt,
         }
       });
@@ -122,7 +198,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid call payload' }, { status: 400 });
       }
 
-      const timestamp = new Date(call.timestamp);
+      const timestamp = parseWarsawDate(call.timestamp);
 
       // Check if call already exists
       const existingCall = await prisma.crmCall.findUnique({

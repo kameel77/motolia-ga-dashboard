@@ -60,11 +60,54 @@ function request(path) {
 function mapStatus(statusName) {
   if (!statusName) return 'NEW';
   const s = statusName.toLowerCase();
-  if (s.includes('nowy')) return 'NEW';
-  if (s.includes('otwarty') || s.includes('kontakt') || s.includes('proces') || s.includes('bieżąc')) return 'IN_PROGRESS';
-  if (s.includes('zamkni') || s.includes('zamknięty') || s.includes('wygran') || s.includes('sukces')) return 'WON';
-  if (s.includes('odrzucon') || s.includes('przegran') || s.includes('lost') || s.includes('spam') || s.includes('anulowan')) return 'LOST';
-  return 'NEW';
+  
+  if (
+    s.includes("odrzucon") || 
+    s.includes("przegran") || 
+    s.includes("lost") || 
+    s.includes("spam") || 
+    s.includes("anulowan") ||
+    s.includes("rezygnac") ||
+    s.includes("bez powodzenia")
+  ) {
+    return "LOST";
+  }
+  
+  if (
+    s.includes("wygran") || 
+    s.includes("sukces") || 
+    s.includes("sprzedan") || 
+    s.includes("zaakceptowane") ||
+    s.includes("won") ||
+    (s.includes("zamkni") || s.includes("zamknięty"))
+  ) {
+    return "WON";
+  }
+  
+  if (
+    s.includes("oferta") || 
+    s.includes("offer") || 
+    s.includes("wycen")
+  ) {
+    return "OFFER";
+  }
+  
+  if (
+    s.includes("otwarty") || 
+    s.includes("kontakt") || 
+    s.includes("proces") || 
+    s.includes("bieżąc") ||
+    s.includes("toku") ||
+    s.includes("podjęt")
+  ) {
+    return "IN_PROGRESS";
+  }
+  
+  if (s.includes("nowy") || s.includes("nowe")) {
+    return "NEW";
+  }
+  
+  return "NEW";
 }
 
 // Map Thulium source to CrmLeadSource
