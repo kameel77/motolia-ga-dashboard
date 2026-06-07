@@ -13,13 +13,27 @@ export async function GET(request: NextRequest) {
   const sourceFilter = searchParams.get('source') as CrmLeadSource | null;
   const search = searchParams.get('search') || '';
   const agentFilter = searchParams.get('agent') || '';
+  const startDateStr = searchParams.get('startDate');
+  const endDateStr = searchParams.get('endDate');
   const page = Math.max(1, Number(searchParams.get('page') || 1));
   const limit = Math.max(1, Number(searchParams.get('limit') || 20));
   const skip = (page - 1) * limit;
 
   try {
-    // Build where clause
-    const where: Prisma.CrmLeadWhereInput = {};
+    // Build base date filter
+    const dateWhere: Prisma.CrmLeadWhereInput = {};
+    if (startDateStr || endDateStr) {
+      dateWhere.thuliumCreatedAt = {};
+      if (startDateStr) {
+        dateWhere.thuliumCreatedAt.gte = new Date(startDateStr);
+      }
+      if (endDateStr) {
+        dateWhere.thuliumCreatedAt.lte = new Date(endDateStr);
+      }
+    }
+
+    // Build specific where clause for leads list (includes filters)
+    const where: Prisma.CrmLeadWhereInput = { ...dateWhere };
 
     if (statusFilter) {
       where.status = statusFilter;
@@ -50,9 +64,10 @@ export async function GET(request: NextRequest) {
       prisma.crmLead.count({ where }),
     ]);
 
-    // Fetch KPI stats (overall, independent of filters)
+    // Fetch KPI stats (filtered by date range)
     const kpiStats = await prisma.crmLead.groupBy({
       by: ['status'],
+      where: dateWhere,
       _count: { id: true },
       _sum: { value: true },
     });
@@ -92,16 +107,17 @@ export async function GET(request: NextRequest) {
       { name: 'Nowe', stage: 'NEW', count: statusCounts['NEW'] || 0 },
       { name: 'W kontakcie', stage: 'IN_PROGRESS', count: statusCounts['IN_PROGRESS'] || 0 },
       { name: 'Oferta', stage: 'OFFER', count: statusCounts['OFFER'] || 0 },
-      { name: 'Wygrane', stage: 'WON', count: statusCounts['WON'] || 0 },
+      { name: 'Aktywne wnioski', stage: 'WON', count: statusCounts['WON'] || 0 },
       { name: 'Przegrane', stage: 'LOST', count: statusCounts['LOST'] || 0 },
     ];
 
-    // Agent performance (group by agentName)
+    // Agent performance (group by agentName, filtered by date range)
     const agentStats = await prisma.crmLead.groupBy({
       by: ['agentName'],
       _count: { id: true },
       _sum: { value: true },
       where: {
+        ...dateWhere,
         agentName: { not: null }
       }
     });
@@ -110,6 +126,7 @@ export async function GET(request: NextRequest) {
       by: ['agentName'],
       _count: { id: true },
       where: {
+        ...dateWhere,
         status: 'WON',
         agentName: { not: null }
       }

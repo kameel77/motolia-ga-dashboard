@@ -72,6 +72,10 @@ export default function LeadsPage() {
   const [agents, setAgents] = useState<AgentStat[]>([]);
   const [activeAgentsList, setActiveAgentsList] = useState<string[]>([]);
   
+  const [period, setPeriod] = useState<string>('all'); // 'today', 'week', 'month', 'all', 'custom'
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -90,6 +94,52 @@ export default function LeadsPage() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
+  // Compute date range parameters for the API call
+  const getDateParams = useCallback(() => {
+    const now = new Date();
+    const start = new Date();
+    const end = new Date();
+
+    if (period === 'today') {
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: start.toISOString(), endDate: end.toISOString() };
+    }
+    
+    if (period === 'week') {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now.setDate(diff));
+      monday.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: monday.toISOString(), endDate: end.toISOString() };
+    }
+
+    if (period === 'month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      firstDay.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return { startDate: firstDay.toISOString(), endDate: end.toISOString() };
+    }
+
+    if (period === 'custom') {
+      const ret: { startDate?: string; endDate?: string } = {};
+      if (customStartDate) {
+        const s = new Date(customStartDate);
+        s.setHours(0, 0, 0, 0);
+        ret.startDate = s.toISOString();
+      }
+      if (customEndDate) {
+        const e = new Date(customEndDate);
+        e.setHours(23, 59, 59, 999);
+        ret.endDate = e.toISOString();
+      }
+      return ret;
+    }
+
+    return {};
+  }, [period, customStartDate, customEndDate]);
+
   // Fetch leads and aggregates from API
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -99,6 +149,11 @@ export default function LeadsPage() {
       if (source) params.append('source', source);
       if (agent) params.append('agent', agent);
       if (debouncedSearch) params.append('search', debouncedSearch);
+      
+      const dateParams = getDateParams();
+      if (dateParams.startDate) params.append('startDate', dateParams.startDate);
+      if (dateParams.endDate) params.append('endDate', dateParams.endDate);
+      
       params.append('page', String(page));
       params.append('limit', '20');
 
@@ -119,7 +174,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, source, agent, debouncedSearch, page]);
+  }, [status, source, agent, debouncedSearch, page, getDateParams]);
 
   useEffect(() => {
     fetchLeads();
@@ -182,6 +237,60 @@ export default function LeadsPage() {
         </button>
       </div>
 
+      {/* Date Range Selector */}
+      <div className="date-filter-row">
+        <div className="filter-group">
+          <button
+            className={`filter-pill ${period === 'today' ? 'active' : ''}`}
+            onClick={() => { setPeriod('today'); setPage(1); }}
+          >
+            Dzisiaj
+          </button>
+          <button
+            className={`filter-pill ${period === 'week' ? 'active' : ''}`}
+            onClick={() => { setPeriod('week'); setPage(1); }}
+          >
+            Ten tydzień
+          </button>
+          <button
+            className={`filter-pill ${period === 'month' ? 'active' : ''}`}
+            onClick={() => { setPeriod('month'); setPage(1); }}
+          >
+            Ten miesiąc
+          </button>
+          <button
+            className={`filter-pill ${period === 'all' ? 'active' : ''}`}
+            onClick={() => { setPeriod('all'); setPage(1); }}
+          >
+            Wszystko
+          </button>
+          <button
+            className={`filter-pill ${period === 'custom' ? 'active' : ''}`}
+            onClick={() => { setPeriod('custom'); setPage(1); }}
+          >
+            Zakres dat...
+          </button>
+        </div>
+
+        {period === 'custom' && (
+          <div className="custom-date-inputs">
+            <input
+              type="date"
+              className="date-input-crm"
+              value={customStartDate}
+              onChange={(e) => { setCustomStartDate(e.target.value); setPage(1); }}
+            />
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>do</span>
+            <input
+              type="date"
+              className="date-input-crm"
+              value={customEndDate}
+              onChange={(e) => { setCustomEndDate(e.target.value); setPage(1); }}
+            />
+          </div>
+        )}
+      </div>
+
       {/* KPI stats grid */}
       <div className="leads-kpis">
         <div className="kpi-card-crm total">
@@ -201,27 +310,27 @@ export default function LeadsPage() {
         </div>
 
         <div className="kpi-card-crm won">
-          <div className="kpi-label">Wygrane leady</div>
+          <div className="kpi-label">Aktywne wnioski</div>
           <div className="kpi-value-container">
             <div className="kpi-value">{kpis.wonLeads}</div>
           </div>
-          <div className="kpi-subtext">Zakończone sukcesem handlowym</div>
+          <div className="kpi-subtext">Zaakceptowane wnioski finansowania</div>
         </div>
 
         <div className="kpi-card-crm value">
-          <div className="kpi-label">Suma sprzedaży</div>
+          <div className="kpi-label">Wartość wniosków</div>
           <div className="kpi-value-container">
             <div className="kpi-value" style={{ color: 'var(--accent-green)' }}>{formatPLN(kpis.totalWonValue)}</div>
           </div>
-          <div className="kpi-subtext">Całkowita wartość wygranych leadów</div>
+          <div className="kpi-subtext">Całkowita wartość aktywnych wniosków</div>
         </div>
 
         <div className="kpi-card-crm cr">
-          <div className="kpi-label">Konwersja CRM</div>
+          <div className="kpi-label">Konwersja wnioski</div>
           <div className="kpi-value-container">
             <div className="kpi-value">{kpis.conversionRate}%</div>
           </div>
-          <div className="kpi-subtext">Współczynnik wygranych leadów (CR%)</div>
+          <div className="kpi-subtext">Współczynnik konwersji wniosków (CR%)</div>
         </div>
       </div>
 
@@ -257,7 +366,7 @@ export default function LeadsPage() {
         <div className="leaderboard-card">
           <h2 className="leaderboard-title">
             <span>Efektywność Agentów</span>
-            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>Suma sprzedaży</span>
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>Wartość wniosków</span>
           </h2>
           {agents.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
