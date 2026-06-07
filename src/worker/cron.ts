@@ -262,6 +262,26 @@ async function fetchThulium(path: string): Promise<any> {
   return res.json();
 }
 
+function parseWarsawDate(dateStr: string | null | undefined): Date {
+  if (!dateStr) return new Date();
+  const isoStr = dateStr.replace(" ", "T");
+  if (isoStr.includes("Z") || isoStr.includes("+") || (isoStr.includes("-") && isoStr.split("-").length > 3)) {
+    return new Date(dateStr);
+  }
+  
+  const dateObj = new Date(isoStr + "Z");
+  try {
+    const tzString = dateObj.toLocaleString("en-US", { timeZone: "Europe/Warsaw" });
+    const localDate = new Date(tzString);
+    const diffMs = localDate.getTime() - dateObj.getTime();
+    return new Date(new Date(isoStr + "Z").getTime() - diffMs);
+  } catch (e) {
+    const month = dateObj.getUTCMonth() + 1;
+    const offset = (month >= 4 && month <= 10) ? "+02:00" : "+01:00";
+    return new Date(isoStr + offset);
+  }
+}
+
 function mapThuliumStatus(statusName: string | null): "NEW" | "IN_PROGRESS" | "WON" | "LOST" {
   if (!statusName) return "NEW";
   const s = statusName.toLowerCase();
@@ -332,7 +352,7 @@ async function collectThulium(): Promise<void> {
     let callsImported = 0;
 
     for (const call of calls) {
-      const timestamp = new Date(call.date);
+      const timestamp = parseWarsawDate(call.date);
       if (isNaN(timestamp.getTime())) continue;
 
       await prisma.crmCall.upsert({
@@ -353,6 +373,7 @@ async function collectThulium(): Promise<void> {
           duration: parseInt(call.duration) || 0,
           billsec: parseInt(call.billsec) || 0,
           agentName: call.user_login || null,
+          timestamp,
         }
       });
 
@@ -401,8 +422,8 @@ async function collectThulium(): Promise<void> {
     let ticketsImported = 0;
 
     for (const ticket of tickets) {
-      const thuliumCreatedAt = new Date(ticket.created_at);
-      const thuliumUpdatedAt = new Date(ticket.updated_at);
+      const thuliumCreatedAt = parseWarsawDate(ticket.created_at);
+      const thuliumUpdatedAt = parseWarsawDate(ticket.updated_at);
       if (isNaN(thuliumCreatedAt.getTime())) continue;
 
       const cust = customerMap.get(String(ticket.customer_id)) || {
@@ -445,6 +466,7 @@ async function collectThulium(): Promise<void> {
           status: statusVal,
           thuliumStatus: ticket.full_status_name || "Nowy",
           agentName: ticket.user_login || null,
+          thuliumCreatedAt,
           thuliumUpdatedAt,
           value: details.value > 0 ? details.value : undefined,
         }
@@ -494,6 +516,7 @@ async function collectThulium(): Promise<void> {
     console.error(`[Cron] ${ts()} collectThulium error:`, err);
   }
 }
+
 
 // ---------------------------------------------------------------------------
 // Full collection cycle

@@ -8,6 +8,26 @@ const USERNAME = process.env.THULIUM_USERNAME || 'api_user_analytics';
 const API_KEY = process.env.THULIUM_API_KEY || 'BgytA1KGyqU7225k2XJjhSkB7C1DEZBX3+9S1XlEmWs=';
 const INSTANCE = process.env.THULIUM_INSTANCE || 'motolia';
 
+function parseWarsawDate(dateStr) {
+  if (!dateStr) return new Date();
+  const isoStr = dateStr.replace(" ", "T");
+  if (isoStr.includes("Z") || isoStr.includes("+") || (isoStr.includes("-") && isoStr.split("-").length > 3)) {
+    return new Date(dateStr);
+  }
+  
+  const dateObj = new Date(isoStr + "Z");
+  try {
+    const tzString = dateObj.toLocaleString("en-US", { timeZone: "Europe/Warsaw" });
+    const localDate = new Date(tzString);
+    const diffMs = localDate.getTime() - dateObj.getTime();
+    return new Date(new Date(isoStr + "Z").getTime() - diffMs);
+  } catch (e) {
+    const month = dateObj.getUTCMonth() + 1;
+    const offset = (month >= 4 && month <= 10) ? "+02:00" : "+01:00";
+    return new Date(isoStr + offset);
+  }
+}
+
 function request(path) {
   return new Promise((resolve, reject) => {
     const auth = Buffer.from(`${USERNAME}:${API_KEY}`).toString('base64');
@@ -128,7 +148,7 @@ async function main() {
       }
 
       for (const call of calls) {
-        const timestamp = new Date(call.date);
+        const timestamp = parseWarsawDate(call.date);
         if (isNaN(timestamp.getTime())) continue;
 
         // Upsert CrmCall
@@ -150,6 +170,7 @@ async function main() {
             duration: parseInt(call.duration) || 0,
             billsec: parseInt(call.billsec) || 0,
             agentName: call.user_login || null,
+            timestamp,
           }
         });
 
@@ -215,8 +236,8 @@ async function main() {
       }
 
       for (const ticket of tickets) {
-        const thuliumCreatedAt = new Date(ticket.created_at);
-        const thuliumUpdatedAt = new Date(ticket.updated_at);
+        const thuliumCreatedAt = parseWarsawDate(ticket.created_at);
+        const thuliumUpdatedAt = parseWarsawDate(ticket.updated_at);
         if (isNaN(thuliumCreatedAt.getTime())) continue;
 
         // Lookup customer info
@@ -262,6 +283,7 @@ async function main() {
             status: statusVal,
             thuliumStatus: ticket.full_status_name || 'Nowy',
             agentName: ticket.user_login || null,
+            thuliumCreatedAt,
             thuliumUpdatedAt,
             value: details.value > 0 ? details.value : undefined, // update value if found
           }
