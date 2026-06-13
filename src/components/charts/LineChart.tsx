@@ -80,7 +80,7 @@ function CustomTooltip({
             <div key={i} style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', padding: '4px 0', borderBottom: i < minuteSpots.length - 1 ? '1px dashed rgba(255,255,255,0.04)' : 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--text-primary)' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                {s.station}
+                {s.station} {s.time ? `(${s.time})` : ''}
               </div>
               <div style={{ color: 'var(--text-secondary)', marginTop: 2, paddingLeft: 12 }}>
                 Program: <span style={{ color: 'var(--text-primary)' }}>{s.program || '—'}</span>

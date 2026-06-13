@@ -4,6 +4,32 @@ import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
 import { getWarsawDateString, getWarsawNow } from '@/lib/utils';
 
+function toWarsawTimeZoneDate(date: Date): Date {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Warsaw',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false,
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const val = (name: string) => parseInt(parts.find(p => p.type === name)?.value || '0');
+  
+  const hour = val('hour');
+  return new Date(Date.UTC(
+    val('year'),
+    val('month') - 1,
+    val('day'),
+    hour === 24 ? 0 : hour,
+    val('minute'),
+    val('second')
+  ));
+}
+
 function getDayRange(dateStr: string): { start: Date; end: Date } {
   const d = new Date(dateStr + 'T00:00:00');
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -37,13 +63,21 @@ export async function GET(request: NextRequest) {
   const todayPrefix = dateStr.replace(/-/g, '');
 
   const [year, month, day] = dateStr.split('-').map(Number);
-  const todayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const tempStartUtc = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const tempEndUtc = new Date(tempStartUtc.getTime() + 24 * 60 * 60 * 1000);
+
+  // Calculate the timezone offset in Warsaw local time for this day
+  const warsawStartUtc = toWarsawTimeZoneDate(tempStartUtc);
+  const offsetMs = warsawStartUtc.getTime() - tempStartUtc.getTime();
+
+  // Standard UTC boundaries for query (representing local Warsaw day)
+  const todayStart = new Date(tempStartUtc.getTime() - offsetMs);
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
-  const yesterdayDate = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+  const yesterdayDate = new Date(tempStartUtc.getTime() - 24 * 60 * 60 * 1000);
   const yesterdayPrefix = getWarsawDateString(yesterdayDate).replace(/-/g, '');
 
-  const weekAgoDate = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const weekAgoDate = new Date(tempStartUtc.getTime() - 7 * 24 * 60 * 60 * 1000);
   const weekAgoPrefix = getWarsawDateString(weekAgoDate).replace(/-/g, '');
 
   const [todayData, yesterdayData, weekAgoData, realtimeSnapshots, crmCalls, crmLeads] = await Promise.all([
@@ -65,8 +99,8 @@ export async function GET(request: NextRequest) {
     prisma.realtimeSnapshot.findMany({
       where: {
         capturedAt: {
-          gte: todayStart,
-          lt: todayEnd,
+          gte: tempStartUtc,
+          lt: tempEndUtc,
         },
       },
       orderBy: { capturedAt: 'asc' },
@@ -173,14 +207,14 @@ export async function GET(request: NextRequest) {
     }
 
     const crmCallsCount = crmCalls.filter(c => {
-      const callTime = new Date(c.timestamp);
+      const callTime = new Date(c.timestamp.getTime() + offsetMs);
       const ch = callTime.getUTCHours();
       const cm = callTime.getUTCMinutes();
       return ch === h && cm >= m && cm < m + 30;
     }).length;
 
     const crmLeadsCount = crmLeads.filter(l => {
-      const leadTime = new Date(l.thuliumCreatedAt);
+      const leadTime = new Date(l.thuliumCreatedAt.getTime() + offsetMs);
       const lh = leadTime.getUTCHours();
       const lm = leadTime.getUTCMinutes();
       return lh === h && lm >= m && lm < m + 30;

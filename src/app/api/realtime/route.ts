@@ -41,12 +41,13 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  // Query spots in the last 30 minutes relative to Warsaw time
-  const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+  // Query spots for the entire visible range of the chart (last 150 minutes)
+  const oldestSnap = history[history.length - 1];
+  const gteTime = oldestSnap ? new Date(oldestSnap.capturedAt) : new Date(now.getTime() - 150 * 60 * 1000);
   const activeSpots = await prisma.tvSchedule.findMany({
     where: {
       airDate: {
-        gte: thirtyMinutesAgo,
+        gte: gteTime,
         lte: now,
       },
     },
@@ -54,12 +55,40 @@ export async function GET(request: NextRequest) {
   });
 
   const spots = activeSpots.map((spot) => {
-    const diffMs = now.getTime() - new Date(spot.airDate).getTime();
-    const minutesAgo = Math.max(0, Math.floor(diffMs / 60000));
+    const spotTime = new Date(spot.airDate);
+    const diffMs = now.getTime() - spotTime.getTime();
+    
+    // Find the closest snapshot in history to align the minutesAgo value
+    let alignedMinutesAgo = Math.max(0, Math.floor(diffMs / 60000));
+    let minDiffMs = Infinity;
+    let closestSnapMinutesAgo = alignedMinutesAgo;
+
+    history.forEach((snap) => {
+      const snapTime = new Date(snap.capturedAt);
+      const snapDiffMs = now.getTime() - snapTime.getTime();
+      const snapMinutesAgo = Math.max(0, Math.floor(snapDiffMs / 60000));
+      
+      const timeDiff = Math.abs(snapTime.getTime() - spotTime.getTime());
+      if (timeDiff < minDiffMs) {
+        minDiffMs = timeDiff;
+        closestSnapMinutesAgo = snapMinutesAgo;
+      }
+    });
+
+    // If the closest snapshot is within 5 minutes of the spot, align it to that snapshot's minutesAgo
+    if (minDiffMs < 5 * 60 * 1000) {
+      alignedMinutesAgo = closestSnapMinutesAgo;
+    }
+
+    const hh = String(spotTime.getUTCHours()).padStart(2, '0');
+    const mm = String(spotTime.getUTCMinutes()).padStart(2, '0');
+    const timeStr = `${hh}:${mm}`;
+
     const pasmoKey = spot.pasmo?.toLowerCase().trim() || '';
     const color = PASMO_COLORS[pasmoKey] || '#3b82f6';
     return {
-      minutesAgo,
+      minutesAgo: alignedMinutesAgo,
+      time: timeStr,
       station: spot.station,
       program: spot.program,
       spotLength: spot.spotLength,
