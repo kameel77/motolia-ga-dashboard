@@ -381,10 +381,20 @@ export default function TrendsPage() {
                 dy={8}
               />
               <YAxis
+                yAxisId="left"
                 axisLine={false}
                 tickLine={false}
                 tick={{ fill: '#5c6070', fontSize: 11 }}
                 dx={-8}
+                width={50}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#5c6070', fontSize: 11 }}
+                dx={8}
                 width={50}
               />
 
@@ -411,6 +421,7 @@ export default function TrendsPage() {
               <Area
                 type="monotone"
                 dataKey="Sesje"
+                yAxisId="left"
                 stroke="#3b82f6"
                 strokeWidth={2}
                 fill="url(#gradSessions)"
@@ -421,6 +432,7 @@ export default function TrendsPage() {
               <Line
                 type="monotone"
                 dataKey="Konwersje"
+                yAxisId="right"
                 stroke="#10b981"
                 strokeWidth={2}
                 dot={false}
@@ -431,6 +443,7 @@ export default function TrendsPage() {
                 <Line
                   type="monotone"
                   dataKey="Telefony CRM"
+                  yAxisId="right"
                   stroke="#06b6d4"
                   strokeWidth={2}
                   dot={false}
@@ -442,6 +455,7 @@ export default function TrendsPage() {
                 <Line
                   type="monotone"
                   dataKey="Formularze CRM"
+                  yAxisId="right"
                   stroke="#8b5cf6"
                   strokeWidth={2}
                   dot={false}
@@ -453,6 +467,7 @@ export default function TrendsPage() {
                  <Line
                    type="monotone"
                    dataKey="Wczoraj"
+                   yAxisId="left"
                    stroke="#8b8fa3"
                    strokeWidth={1.5}
                    strokeDasharray="6 4"
@@ -464,6 +479,7 @@ export default function TrendsPage() {
                  <Line
                    type="monotone"
                    dataKey="Tydzień temu"
+                   yAxisId="left"
                    stroke="#5c6070"
                    strokeWidth={1.5}
                    strokeDasharray="6 4"
