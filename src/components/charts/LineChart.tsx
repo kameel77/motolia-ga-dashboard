@@ -17,6 +17,7 @@ interface LineConfig {
   color: string;
   label: string;
   dashed?: boolean;
+  yAxisId?: 'left' | 'right';
 }
 
 interface LineChartProps {
@@ -144,6 +145,7 @@ export default function LineChartComponent({
           tickFormatter={xTickFormatter}
         />
         <YAxis
+          yAxisId="left"
           axisLine={false}
           tickLine={false}
           tick={{ fill: '#5c6070', fontSize: 12 }}
@@ -154,6 +156,17 @@ export default function LineChartComponent({
             return String(v);
           }}
         />
+        {lines.some((l) => l.yAxisId === 'right') && (
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: '#5c6070', fontSize: 12 }}
+            dx={8}
+            width={50}
+          />
+        )}
 
         <Tooltip content={<CustomTooltip spots={spots} />} />
 
@@ -188,6 +201,7 @@ export default function LineChartComponent({
             key={line.key}
             type="monotone"
             dataKey={line.key}
+            yAxisId={line.yAxisId || 'left'}
             name={line.label}
             stroke={line.color}
             strokeWidth={2}

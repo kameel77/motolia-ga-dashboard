@@ -14,9 +14,10 @@ interface ConversionKPI {
 
 interface DailyConv {
   date: string;
-  formSubmissions: number;
-  phoneClicks: number;
-  total: number;
+  sessions: number;
+  users: number;
+  crmForms: number;
+  crmPhones: number;
 }
 
 interface EventRow {
@@ -71,9 +72,10 @@ export default function ConversionsPage() {
   const chartData =
     data?.daily?.map((d) => ({
       date: d.date,
-      Formularze: d.formSubmissions,
-      Telefony: d.phoneClicks,
-      Łącznie: d.total,
+      Sesje: d.sessions,
+      Użytkownicy: d.users,
+      'Formularze CRM': d.crmForms,
+      'Połączenia CRM': d.crmPhones,
     })) ?? [];
 
   const eventColumns = [
@@ -126,7 +128,7 @@ export default function ConversionsPage() {
         ) : data ? (
           <>
             <KPICard
-              label="Formularze"
+              label="Formularze CRM"
               value={data.formSubmissions.value.toLocaleString('pl-PL')}
               trend={calcTrend(
                 data.formSubmissions.value,
@@ -135,7 +137,7 @@ export default function ConversionsPage() {
               sparklineColor="#10b981"
             />
             <KPICard
-              label="Telefony"
+              label="Połączenia CRM"
               value={data.phoneClicks.value.toLocaleString('pl-PL')}
               trend={calcTrend(
                 data.phoneClicks.value,
@@ -206,9 +208,10 @@ export default function ConversionsPage() {
               data={chartData}
               xKey="date"
               lines={[
-                { key: 'Formularze', color: '#10b981', label: 'Formularze' },
-                { key: 'Telefony', color: '#f97316', label: 'Telefony' },
-                { key: 'Łącznie', color: '#3b82f6', label: 'Łącznie' },
+                { key: 'Sesje', color: '#3b82f6', label: 'Sesje' },
+                { key: 'Użytkownicy', color: '#8b5cf6', label: 'Użytkownicy' },
+                { key: 'Formularze CRM', color: '#10b981', label: 'Formularze CRM', yAxisId: 'right' },
+                { key: 'Połączenia CRM', color: '#f97316', label: 'Połączenia CRM', yAxisId: 'right' },
               ]}
               height={280}
               xTickFormatter={(v) => {
