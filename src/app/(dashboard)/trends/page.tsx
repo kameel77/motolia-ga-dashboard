@@ -410,6 +410,7 @@ export default function TrendsPage() {
                   <ReferenceLine
                     key={i}
                     x={bucketLabel}
+                    yAxisId="left"
                     stroke={spot.color || PASMO_COLORS[spot.pasmo] || '#fbbf24'}
                     strokeDasharray="4 4"
                     strokeWidth={1.5}
