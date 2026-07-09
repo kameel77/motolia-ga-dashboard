@@ -252,8 +252,8 @@ export async function GET(request: NextRequest) {
   const heatmapCount = Array.from({ length: 7 }, () => Array(24).fill(0));
 
   for (const row of deduplicated.values()) {
-    const dh = row.dateHour; // "YYYYMMDDHH"
-    if (dh.length !== 10) continue;
+    const dh = row.dateHour; // "YYYYMMDDHH" or "YYYYMMDDHHMM"
+    if (dh.length !== 10 && dh.length !== 12) continue;
     const year = parseInt(dh.slice(0, 4));
     const month = parseInt(dh.slice(4, 6)) - 1;
     const day = parseInt(dh.slice(6, 8));
