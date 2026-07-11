@@ -211,3 +211,19 @@ model CrmCall {
   @@map("crm_calls")
 }
 
+
+model GscPerformance {
+  id          Int      @id @default(autoincrement())
+  capturedAt  DateTime
+  url         String
+  query       String?
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  ctr         Float    @default(0)
+  position    Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([capturedAt])
+  @@index([url])
+  @@map("gsc_performance")
+}

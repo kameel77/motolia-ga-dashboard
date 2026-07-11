@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta name="robots" content="none">
+            <title>Dokumentacja Thulium REST API</title>
+
+    <link href="/panel/public/images/thulium.ico" rel="shortcut icon">
+
+    <link type="text/css" href="/panel/public/js/plugins/bootstrap-3.4.1/css/bootstrap.min.css?10.2.166" rel="stylesheet"/>
+    <link type="text/css" href="/panel/public/css/new/open_sans.css?10.2.166" rel="stylesheet"/>
+    <link type="text/css" href="/panel/public/css/new/api.css?10.2.166" rel="stylesheet"/>
+
+    <script type="text/javascript" src="/panel/public/js/jquery.min.js?10.2.166"></script>
+    <script type="text/javascript" src="/panel/public/js/plugins/bootstrap-3.4.1/js/bootstrap.min.js?10.2.166"></script>
+    <script type="text/javascript" src="/panel/public/js/plugins/jquery-cookie/jquery.cookie.js?10.2.166"></script>
+
+    <style media="print" type="text/css">
+        body {
+            background-color: red;
+        }
+    </style>
+
+    <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+    <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+</head>
+<body>
+<header>
+    <nav class="navbar navbar-default">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse"
+                        data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/docs/api">Thulium REST API</a>
+            </div>
+
+            <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                <ul class="nav navbar-nav">
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true"
+                           aria-expanded="false">Wprowadzenie                            <span class="caret"></span></a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a href="/docs/api/authentication">
+                                    Uwierzytelnianie                                </a>
+                            </li>
+                            <li>
+                                <a href="/docs/api/response_codes">
+                                    Kody odpowiedzi                                </a>
+                            </li>
+                            <li>
+                                <a href="/docs/api/error_handling">
+                                    Obsługa błędów                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true"
+                           aria-expanded="false">Zewnętrzne zasoby                            <span class="caret"></span></a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a href="/docs/api/external_crm">
+                                    CRM                                </a>
+                                <a href="/docs/api/external_IVR:apigoto">
+                                    IVR: apigoto                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="/docs/api/notifications">
+                            Notyfikacje                        </a>
+                    </li>
+                    <li>
+                        <a href="/docs/api/printer" target="_blank" rel="noopener noreferrer">
+                            Wersja do druku                        </a>
+                    </li>
+                </ul>
+                <ul class="nav navbar-nav navbar-right">
+                    <li class="lang lang-pl" data-lang="pl"><a href="#">PL</a></li>
+                    <li class="lang lang-en" data-lang="en"><a href="#">EN</a></li>
+                    <li>
+                        <a>
+                            <img style="  width: 18px; height: 18px;" src="/panel/public/images/thulium.png"
+                                 alt="Thulium logo">
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+</header>
+
+<section style="margin-bottom: 60px;">
+    <div class="container">
+        <article class="category">
+    <h3 class="header">Agenci</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/agents/get_agents">agents</a>
+                </td>
+                <td>Zwraca listę agentów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/agents/get_agents_login">agents/:login</a>
+                </td>
+                <td>Zwraca informacje o agencie.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/agents/get_agents_login_last_queue_call">agents/:login/last_queue_call</a>
+                </td>
+                <td>Zwraca ostatnią rozmowę z kolejki.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/agents/get_agents_login_status">agents/:login/status</a>
+                </td>
+                <td>Zwraca status agenta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/agents/get_agents_groups">agents_groups</a>
+                </td>
+                <td>Zwraca grupy agentów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/agents/get_agents_statuses">agents_statuses</a>
+                </td>
+                <td>Zwraca statusy agentów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/agents/get_agents_work_report">agents_work_report</a>
+                </td>
+                <td>Zwraca raport pracy agentów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents">agents</a>
+                </td>
+                <td>Dodanie agenta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_answer">agents/:login/answer</a>
+                </td>
+                <td>Odbiera telefon agenta jeśli korzysta on z Thulium Softphone.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_call">agents/:login/call</a>
+                </td>
+                <td>Zestawia połączenie dla agenta na podany numer.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_call_preview">agents/:login/call_preview</a>
+                </td>
+                <td>Dzwoni w kampanii preview.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_free">agents/:login/free</a>
+                </td>
+                <td>Odpauzowuje agenta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_hangup">agents/:login/hangup</a>
+                </td>
+                <td>Rozłącza połączenia agenta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_hold">agents/:login/hold</a>
+                </td>
+                <td>Pauzuje telefon agenta jeśli korzysta on z Thulium Softphone.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_login">agents/:login/login</a>
+                </td>
+                <td>Loguje agenta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_logout">agents/:login/logout</a>
+                </td>
+                <td>Wylogowuje agenta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_mute">agents/:login/mute</a>
+                </td>
+                <td>Wycisza telefon agenta jeśli korzysta on z Thulium Softphone.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_pause">agents/:login/pause</a>
+                </td>
+                <td>Pauzuje agenta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_stop_recording">agents/:login/stop_recording</a>
+                </td>
+                <td>Zatrzymuje nagrywanie bieżącej rozmowy agenta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_transfer">agents/:login/transfer</a>
+                </td>
+                <td>Transferuje połaczenie agenta jeśli korzysta on z Thulium Softphone.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_unhold">agents/:login/unhold</a>
+                </td>
+                <td>Wyłacza pauze telefonu agenta jeśli korzysta on z Thulium Softphone.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/agents/post_agents_login_unmute">agents/:login/unmute</a>
+                </td>
+                <td>Wyłącza wyciszenie telefonu agenta jeśli korzysta on z Thulium Softphone.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Czaty</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/chats/delete_chat_conversations_id">chat_conversations/:id</a>
+                </td>
+                <td>Usuwanie konwersacji czatu.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/chats/delete_chat_conversations_content_id_participant">chat_conversations/content/:id/:participant</a>
+                </td>
+                <td>Usuwanie treści wiadomości danej konwersacji.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/chats/get_chats">chats</a>
+                </td>
+                <td>Zwraca listę czatów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/chats/get_chats_queues">chats/queues</a>
+                </td>
+                <td>Zwraca listę kolejek czatów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/chats/get_chats_reports_summary">chats/reports/summary</a>
+                </td>
+                <td>Zwraca raport czatów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/chats/post_chat_conversations_id_message">chat_conversations/:id/message</a>
+                </td>
+                <td>Wysyła wiadomość na czacie.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/chats/post_chat_conversations_id_stop">chat_conversations/:id/stop</a>
+                </td>
+                <td>Zakańcza konwersację na czacie.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/chats/post_chat_conversations_start">chat_conversations/start</a>
+                </td>
+                <td>Rozpoczyna konwersację na czacie.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">CRM</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/crm/delete_companies_id">companies/:id</a>
+                </td>
+                <td>Usuwanie firmy.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/crm/delete_customers_id">customers/:id</a>
+                </td>
+                <td>Usuwanie klienta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/crm/get_companies">companies</a>
+                </td>
+                <td>Zwraca listę firm zawężoną o podane kryteria wyszukiwania.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/crm/get_companies_id">companies/:id</a>
+                </td>
+                <td>Zwraca firmę o podanym identyfikatorze firmy.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/crm/get_customer_id_by_outbound_status">customer_id_by_outbound_status</a>
+                </td>
+                <td>Zwraca listę identyfikatorów klientów zawężoną o aktualny status rekordu w kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/crm/get_customers">customers</a>
+                </td>
+                <td>Zwraca listę klientów zawężonych o podane kryteria wyszukiwania.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/crm/get_customers_id">customers/:id</a>
+                </td>
+                <td>Zwraca klienta o podanym identyfikatorze klienta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/crm/post_companies">companies</a>
+                </td>
+                <td>Dodanie firmy do CRM.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/crm/post_customers">customers</a>
+                </td>
+                <td>Dodanie klienta do CRM.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/crm/post_customers_id_feed_records">customers/:id/feed_records</a>
+                </td>
+                <td>Dodanie wpisu do historii kontaktu.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/crm/post_customers_id_notes">customers/:id/notes</a>
+                </td>
+                <td>Dodanie notatki dla klienta w CRM.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/crm/put_companies_id">companies/:id</a>
+                </td>
+                <td>Edycja firmy.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/crm/put_customers_id">customers/:id</a>
+                </td>
+                <td>Edycja klienta.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">CRM (seria)</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/crm_batch/delete_batch_customers">batch/customers</a>
+                </td>
+                <td>Usuwanie wielu klientów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/crm_batch/post_batch_customers">batch/customers</a>
+                </td>
+                <td>Dodanie wielu klientów.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/crm_batch/put_batch_customers">batch/customers</a>
+                </td>
+                <td>Edycja wielu klientów.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Kampanie</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/delete_outbounds_id">outbounds/:id</a>
+                </td>
+                <td>Usuwa kampanię wraz ze wszystkimi rekordami.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/get_outbounds">outbounds</a>
+                </td>
+                <td>Zwraca listę wszystkich kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/get_outbounds_id_agents">outbounds/:id/agents</a>
+                </td>
+                <td>Zwraca listę wszystkich agentów w danej kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/get_outbounds_id_stats">outbounds/:id/stats</a>
+                </td>
+                <td>Zwraca statystykę rekordów dla kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/get_outbounds_id_statuses">outbounds/:id/statuses</a>
+                </td>
+                <td>Zwraca listę wszystkich statusów w danej kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/get_outbounds_stats">outbounds/stats</a>
+                </td>
+                <td>Zwraca statystykę rekordów dla wszystkich aktywnych kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/post_outbounds">outbounds</a>
+                </td>
+                <td>Dodaje kampanie.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/post_outbounds_id_add_agents">outbounds/:id/add_agents</a>
+                </td>
+                <td>Dodaje listę agentów do kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/post_outbounds_id_clone">outbounds/:id/clone</a>
+                </td>
+                <td>Klonuje kampanię.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/post_outbounds_id_remove_agents">outbounds/:id/remove_agents</a>
+                </td>
+                <td>Usuwa agentów z kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/post_outbounds_id_set_agents">outbounds/:id/set_agents</a>
+                </td>
+                <td>Dodaje i usuwa agentów z kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/outbounds/put_outbounds_id">outbounds/:id</a>
+                </td>
+                <td>Aktualizuje kampanie.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Kampanie (seria)</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/outbounds_batch/delete_batch_outbounds">batch/outbounds</a>
+                </td>
+                <td>Usuwanie wielu kampanii wraz ze wszystkimi rekordami.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Kampanie CRM</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/crm_outbounds/delete_crm_outbounds_id_records_customer_id">crm_outbounds/:id/records/:customer_id</a>
+                </td>
+                <td>Usuwanie rekordu z kampanii CRM.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/crm_outbounds/get_crm_outbounds_id_records">crm_outbounds/:id/records</a>
+                </td>
+                <td>Zwraca listę rekordów w kampanii wraz z podstawowymi parametrami.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/crm_outbounds/get_crm_outbounds_id_records_customer_id">crm_outbounds/:id/records/:customer_id</a>
+                </td>
+                <td>Zwraca informacje o rekordzie w kampanii zasilanej z CRM.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/crm_outbounds/post_crm_outbounds_id_records">crm_outbounds/:id/records</a>
+                </td>
+                <td>Dodanie rekordu do kampanii CRM.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/crm_outbounds/post_crm_outbounds_id_records_customer_id_copy_notes">crm_outbounds/:id/records/:customer_id/copy_notes</a>
+                </td>
+                <td>Kopiuje notatki z kampanii do CRM.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/crm_outbounds/put_crm_outbounds_id_records_customer_id">crm_outbounds/:id/records/:customer_id</a>
+                </td>
+                <td>Edycja rekordu z kampanii zasilanej z CRM.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Kampanie CRM (seria)</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/crm_outbounds_batch/delete_batch_crm_outbounds_id_records">batch/crm_outbounds/:id/records</a>
+                </td>
+                <td>Usuwanie wielu rekordów z kampanii CRM.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/crm_outbounds_batch/post_batch_crm_outbounds_id_records">batch/crm_outbounds/:id/records</a>
+                </td>
+                <td>Dodanie wielu rekordów do kampanii CRM.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Kampanie zwykłe</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/delete_outbounds_id_records_phone_number">outbounds/:id/records/:phone_number</a>
+                </td>
+                <td>Usuwanie rekordu z kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/delete_outbounds_id_records_by_identifier_identifier">outbounds/:id/records_by_identifier/:identifier</a>
+                </td>
+                <td>Usuwanie rekordu z kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/get_outbounds_id_records">outbounds/:id/records</a>
+                </td>
+                <td>Zwraca listę rekordów w kampanii wraz z podstawowymi parametrami.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/get_outbounds_id_records_phone_number">outbounds/:id/records/:phone_number</a>
+                </td>
+                <td>Zwraca informacje o rekordzie w kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/get_outbounds_id_records_by_identifier_identifier">outbounds/:id/records_by_identifier/:identifier</a>
+                </td>
+                <td>Zwraca informacje o rekordzie w kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/get_outbounds_by_phone_number_phone_number">outbounds_by_phone_number/:phone_number</a>
+                </td>
+                <td>Zwraca listę kampanii, w których jest podany numer telefonu.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/post_outbound_status_by_phone_number">outbound_status_by_phone_number</a>
+                </td>
+                <td>Zmiana statusu rekordów na podstawie numeru telefonu.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/post_outbounds_id_records">outbounds/:id/records</a>
+                </td>
+                <td>Dodanie rekordu do kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/put_outbounds_id_records_phone_number">outbounds/:id/records/:phone_number</a>
+                </td>
+                <td>Edytowanie rekordu w kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds/put_outbounds_id_records_by_identifier_identifier">outbounds/:id/records_by_identifier/:identifier</a>
+                </td>
+                <td>Edytowanie rekordu w kampanii.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Kampanie zwykłe (seria)</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds_batch/delete_batch_outbounds_id_records">batch/outbounds/:id/records</a>
+                </td>
+                <td>Usuwanie wielu rekordów z kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds_batch/post_batch_outbounds_id_records">batch/outbounds/:id/records</a>
+                </td>
+                <td>Dodanie wielu rekordów do kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/csv_outbounds_batch/put_batch_outbounds_id_records">batch/outbounds/:id/records</a>
+                </td>
+                <td>Edytowanie wielu rekordów w kampanii.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Grupy kampani</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/outbounds_groups/get_outbound_groups">outbound_groups</a>
+                </td>
+                <td>Zwraca listę grup kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/outbounds_groups/get_outbound_groups_id">outbound_groups/:id</a>
+                </td>
+                <td>Zwraca grupę kampanii.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/outbounds_groups/post_outbound_groups">outbound_groups</a>
+                </td>
+                <td>Dodaje grupę kampanii.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Kolejki</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/queues/get_queues">queues</a>
+                </td>
+                <td>Zwraca listę kolejek.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/queues/get_queues_id_topics">queues/:id/topics</a>
+                </td>
+                <td>Zwraca tematy rozmów dostępnych dla danej kolejki.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/queues/get_queues_id_waiting_list">queues/:id/waiting_list</a>
+                </td>
+                <td>Zwraca numery telefonów osób oczekujących w kolejce.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/queues/get_queues_id_waiting_stats">queues/:id/waiting_stats</a>
+                </td>
+                <td>Zwraca liczbę osób oczekujących w kolejce oraz przewidywany czas oczekiwania na połączenie.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/queues/post_queues_id_schedule_call">queues/:id/schedule_call</a>
+                </td>
+                <td>Zaplanowanie połączenia, które zostanie wykonane w kolejce.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Nagrania</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/recordings/delete_recordings">recordings</a>
+                </td>
+                <td>Umieszcza nagranie w kolejce do usunięcia.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/recordings/get_recordings">recordings</a>
+                </td>
+                <td>Zwraca listę nagrań.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/recordings/get_recordings_download">recordings/download</a>
+                </td>
+                <td>Zwraca plik z nagraniem.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/recordings/get_recordings_stream">recordings/stream</a>
+                </td>
+                <td>Strumieniuje plik z nagraniem.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Pliki</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/files/get_downloads_id_attached_file">downloads/:id/attached_file</a>
+                </td>
+                <td>Pobieranie pliku załączonego do klienta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/files/get_files_token">files/:token</a>
+                </td>
+                <td>Pobieranie pliku.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Pliki tymczasowe</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/temporary_files/post_temporary_files">temporary_files</a>
+                </td>
+                <td>Tworzy na serwerze tymczasowy plik.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Połączenia</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/connections/get_connections">connections</a>
+                </td>
+                <td>Zwraca listę połączeń.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/connections/get_connections_id_intents">connections/:id/intents</a>
+                </td>
+                <td>Zwraca intencje rozmowy.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/connections/get_connections_id_topic">connections/:id/topic</a>
+                </td>
+                <td>Zwraca temat rozmowy.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/connections/get_connections_id_transcription">connections/:id/transcription</a>
+                </td>
+                <td>Zwraca transkrypcje rozmowy.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/connections/post_connections_id_evaluation_note">connections/:id/evaluation_note</a>
+                </td>
+                <td>Aktualizuje komentarz do oceny rozmowy.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/connections/post_connections_id_hangup">connections/:id/hangup</a>
+                </td>
+                <td>Rozłącza połączenie.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/connections/post_connections_call">connections/call</a>
+                </td>
+                <td>Zestawia połączenie na wskazany numer.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/connections/post_connections_topic">connections/topic</a>
+                </td>
+                <td>Dodaje lub aktualizuje temat połączenia.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Przekierowania</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/forwardings/delete_forwardings_id">forwardings/:id</a>
+                </td>
+                <td>Usuwanie przekierowania.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/forwardings/get_forwardings">forwardings</a>
+                </td>
+                <td>Pobieranie przekierowań.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/forwardings/post_forwardings">forwardings</a>
+                </td>
+                <td>Dodawanie przekierowania.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/forwardings/put_forwardings_id">forwardings/:id</a>
+                </td>
+                <td>Zmiana przekierowania.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">System</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/system/get_system_pauses">system/pauses</a>
+                </td>
+                <td>Zwraca listę pauz.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/system/get_system_transfer_shortcuts">system/transfer_shortcuts</a>
+                </td>
+                <td>Zwraca skróty do przekierowań.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/system/put_system_announcement">system/announcement</a>
+                </td>
+                <td>Ustawia komunikat systemowy dla użytkowników.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Użytkownicy</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/users/get_users_login">users/:login</a>
+                </td>
+                <td>Zwraca informacje o użytkowniku (przypisane konta SIP).</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Zadania</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/tasks/get_todos_id">todos/:id</a>
+                </td>
+                <td>Zwraca informacje o zadaniu.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/tasks/post_todos">todos</a>
+                </td>
+                <td>Dodaje zadanie użytkownikowi.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Zgłoszenia</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/tickets/delete_tickets_id">tickets/:id</a>
+                </td>
+                <td>Usuwanie zgłoszenia.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/tickets/delete_tickets_id_attachments_token">tickets/:id/attachments/:token</a>
+                </td>
+                <td>Usuwanie załącznika.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/tickets/get_ticket_categories">ticket_categories</a>
+                </td>
+                <td>Zwraca listę kategorii zgłoszeń.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/tickets/get_ticket_queues">ticket_queues</a>
+                </td>
+                <td>Zwraca listę kolejek zgłoszeń.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/tickets/get_ticket_statuses">ticket_statuses</a>
+                </td>
+                <td>Zwraca listę statusów zgłoszeń.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/tickets/get_tickets">tickets</a>
+                </td>
+                <td>Zwraca listę zgłoszeń.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/tickets/get_tickets_id">tickets/:id</a>
+                </td>
+                <td>Zwraca informacje o zgłoszeniu.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/tickets/get_tickets_today_stats">tickets/today_stats</a>
+                </td>
+                <td>Zwraca statystyki zgłoszeń dla obecnego dnia.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/tickets/post_tickets">tickets</a>
+                </td>
+                <td>Dodanie zgłoszenia.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/tickets/post_tickets_id_agent_response">tickets/:id/agent_response</a>
+                </td>
+                <td>Wysłanie wiadomości do zgłoszenia klienta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/tickets/post_tickets_id_comment">tickets/:id/comment</a>
+                </td>
+                <td>Dodanie komentarza do zgłoszenia.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/tickets/post_tickets_id_customer_response">tickets/:id/customer_response</a>
+                </td>
+                <td>Dodanie odpowiedzi od klienta do zgłoszenia.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/tickets/put_tickets_id">tickets/:id</a>
+                </td>
+                <td>Edycja zgłoszenia.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Drzewo IVR</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/ivr/put_ivr_branch_activate">ivr/:branch/activate</a>
+                </td>
+                <td>Aktywuje gałąź IVR.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/ivr/put_ivr_branch_deactivate">ivr/:branch/deactivate</a>
+                </td>
+                <td>Deaktywuje gałąź IVR.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/ivr/put_ivr_branch_prompt_file">ivr/:branch/prompt_file</a>
+                </td>
+                <td>Zmiana nagrania.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Grupy pól specjalnych klienta</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/customer_field_groups/get_customer_field_groups">customer_field_groups</a>
+                </td>
+                <td>Zwraca listę grup pól specjalnych klienta</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Rekordy pól specjalnych klienta</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/customer_field_group_items/delete_customer_field_group_items_id">customer_field_group_items/:id</a>
+                </td>
+                <td>Usuwanie rekordu pól specjalnych klienta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/customer_field_group_items/get_customer_field_group_items">customer_field_group_items</a>
+                </td>
+                <td>Zwraca listę rekordów pól specjalnych klienta</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/customer_field_group_items/post_customer_field_group_items">customer_field_group_items</a>
+                </td>
+                <td>Dodanie rekordu pól specjalnych dla klienta.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">PUT</span></td>
+                <td>
+                    <a href="/docs/api/customer_field_group_items/put_customer_field_group_items_id">customer_field_group_items/:id</a>
+                </td>
+                <td>Edycja rekordu pól specjalnych klienta.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Elementy webhook</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-danger">DELETE</span></td>
+                <td>
+                    <a href="/docs/api/webhooks/delete_webhooks_id">webhooks/:id</a>
+                </td>
+                <td>Usuwa element webhook.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/webhooks/get_webhooks">webhooks</a>
+                </td>
+                <td>Zwraca wszystkie elementy webhook.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/webhooks/post_webhooks">webhooks</a>
+                </td>
+                <td>Dodaje element webhook.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Voicebot</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/voicebot/post_voicebots_name_calls_call_id_transcript">voicebots/:name/calls/:call_id/transcript</a>
+                </td>
+                <td>Dodaje transkrypcję połączenia z voicebotem.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Tematy rozmów</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/topics/get_topics">topics</a>
+                </td>
+                <td>Zwraca aktywne tematy rozmów.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Tagi</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/tags/post_tags">tags</a>
+                </td>
+                <td>Dodaje nowe tagi, duplikaty zostaną automatycznie pominięte.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Wiadomości SMS</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-success">POST</span></td>
+                <td>
+                    <a href="/docs/api/sms_messages/post_sms_messages">sms_messages</a>
+                </td>
+                <td>Wysłanie SMS-a.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+<article class="category">
+    <h3 class="header">Skrzynki głosowe</h3>
+
+    <table class="table table-hover">
+        <thead>
+        <tr>
+            <th style="width: 7%;">HTTP</th>
+            <th style="width: 33%;">Zasób</th>
+            <th style="width: 60%;">Opis</th>
+        </tr>
+        </thead>
+        <tbody>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/voicemails/get_voicemails">voicemails</a>
+                </td>
+                <td>Zwraca wszystkie elementy skrzynki głosowej.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/voicemails/get_voicemails_download">voicemails/download</a>
+                </td>
+                <td>Zwraca plik z nagraniem ze skrzynki głosowej.</td>
+            </tr>
+                                <tr>
+                <td><span class="label label-primary">GET</span></td>
+                <td>
+                    <a href="/docs/api/voicemails/get_voicemails_stream">voicemails/stream</a>
+                </td>
+                <td>Strumieniuje plik z nagraniem ze skrzynki głosowej.</td>
+            </tr>
+                </tbody>
+    </table>
+</article>
+    </div>
+</section>
+</body>
+<script>
+    $(function () {
+        var $lang = $('.lang');
+        $lang.removeClass('active');
+        var apiLang = $.cookie('api-lang');
+        if (typeof apiLang == 'undefined') {
+            $('.lang-pl').addClass('active');
+            setCookie();
+        } else {
+            $('.lang-' + apiLang).addClass('active');
+        }
+        $('.lang a').click(function () {
+            $lang.removeClass('active');
+            $(this).closest('li').addClass('active');
+            setCookie();
+            window.location.reload();
+            return false;
+        });
+    });
+
+    function setCookie() {
+        var lang = $('li.lang.active').attr('data-lang');
+        $.cookie('api-lang', lang, {path: '/'});
+    }
+</script>
+</html>

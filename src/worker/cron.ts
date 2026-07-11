@@ -12,6 +12,7 @@ import {
   fetchDailyConversions,
   fetchDailySummary,
 } from "../lib/ga4-client";
+import { fetchGscData } from "../lib/gsc-client";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -560,6 +561,38 @@ async function collectThulium(): Promise<void> {
 }
 
 
+async function collectGsc(): Promise<void> {
+  console.log(`[Cron] ${ts()} Collecting GSC data...`);
+  try {
+    const siteUrl = process.env.GSC_SITE_URL || "https://motolia.pl/";
+    // GSC data is typically delayed by 2-3 days
+    const targetDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const rows = await fetchGscData(siteUrl, targetDate, targetDate);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.gscPerformance.deleteMany({
+        where: { capturedAt: new Date(targetDate) }
+      });
+      if (rows.length > 0) {
+        await tx.gscPerformance.createMany({
+          data: rows.map((row: any) => ({
+            capturedAt: new Date(targetDate),
+            url: row.keys[0],
+            query: row.keys[1],
+            clicks: row.clicks,
+            impressions: row.impressions,
+            ctr: row.ctr,
+            position: row.position,
+          }))
+        });
+      }
+    });
+    console.log(`[Cron] ${ts()} GSC data saved: ${rows.length} rows for ${targetDate}`);
+  } catch (err) {
+    console.error(`[Cron] ${ts()} collectGsc error:`, err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Full collection cycle
 // ---------------------------------------------------------------------------
@@ -582,6 +615,7 @@ export async function runCollectionCycle(): Promise<void> {
 async function runHourlyCycle(): Promise<void> {
   console.log(`\n[Cron] ========== Hourly cycle start: ${ts()} ==========`);
   await collectDailySummary();
+  await collectGsc();
   await invalidateCache();
   console.log(`[Cron] ========== Hourly cycle complete ==========\n`);
 }
