@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import KPICard from '@/components/ui/KPICard';
 import PeriodSelector from '@/components/ui/PeriodSelector';
 import LineChart from '@/components/charts/LineChart';
@@ -48,15 +48,27 @@ export default function OverviewPage() {
   const [period, setPeriod] = useState('30d');
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     setLoading(true);
+    setError(false);
     fetch(`/api/overview?period=${period}`)
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d) => setData(d))
-      .catch(() => setData(null))
+      .catch(() => {
+        setData(null);
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }, [period]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const buildSparkline = (arr?: number[]) =>
     arr?.map((v) => ({ value: v })) ?? [];
@@ -162,6 +174,13 @@ export default function OverviewPage() {
         </div>
         <PeriodSelector value={period} onChange={setPeriod} />
       </div>
+
+      {error && !loading && (
+        <div className="fetch-error-banner">
+          <span>Nie udało się pobrać danych. Sprawdź połączenie i spróbuj ponownie.</span>
+          <button type="button" onClick={fetchData}>Spróbuj ponownie</button>
+        </div>
+      )}
 
       {/* KPI Grid */}
       <div className="overview-kpi-grid">

@@ -54,9 +54,15 @@ function CustomTooltip({
   const minute = label ? parseInt(label.replace('m', '')) : null;
   const minuteSpots = spots?.filter((s) => s.minutesAgo === minute) ?? [];
 
+  // Show ISO dates (YYYY-MM-DD) in pl-PL format
+  const displayLabel =
+    label && /^\d{4}-\d{2}-\d{2}$/.test(label)
+      ? new Date(label).toLocaleDateString('pl-PL')
+      : label;
+
   return (
     <div className="chart-tooltip" style={{ minWidth: 180, maxWidth: 280 }}>
-      <div className="chart-tooltip-label">{label}</div>
+      <div className="chart-tooltip-label">{displayLabel}</div>
       {payload.map((entry, i) => (
         <div key={i} className="chart-tooltip-item">
           <span

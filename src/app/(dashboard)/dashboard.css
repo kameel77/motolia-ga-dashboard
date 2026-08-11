@@ -325,3 +325,33 @@
     margin-left: var(--sidebar-collapsed);
   }
 }
+
+/* Shared fetch error banner */
+.fetch-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid var(--accent-red);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.fetch-error-banner button {
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fetch-error-banner button:hover {
+  opacity: 0.85;
+}
