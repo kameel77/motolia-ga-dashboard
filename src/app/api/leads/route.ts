@@ -103,13 +103,21 @@ export async function GET(request: NextRequest) {
       return acc;
     }, {} as Record<CrmLeadStatus, number>);
 
+    // Cumulative funnel: "reached at least stage X" (monotonically decreasing).
+    // LOST is excluded from stage counts (stage at loss is unknown) and shown
+    // as a separate exit branch alongside WON.
+    const reachedOffer = (statusCounts['OFFER'] || 0) + (statusCounts['WON'] || 0);
+    const reachedInProgress = (statusCounts['IN_PROGRESS'] || 0) + reachedOffer;
+
     const funnel = [
-      { name: 'Nowe', stage: 'NEW', count: statusCounts['NEW'] || 0 },
-      { name: 'W kontakcie', stage: 'IN_PROGRESS', count: statusCounts['IN_PROGRESS'] || 0 },
-      { name: 'Oferta', stage: 'OFFER', count: statusCounts['OFFER'] || 0 },
-      { name: 'Aktywne wnioski', stage: 'WON', count: statusCounts['WON'] || 0 },
-      { name: 'Przegrane', stage: 'LOST', count: statusCounts['LOST'] || 0 },
+      { name: 'Wszystkie leady', stage: 'NEW', count: totalLeads },
+      { name: 'W kontakcie', stage: 'IN_PROGRESS', count: reachedInProgress },
+      { name: 'Oferta', stage: 'OFFER', count: reachedOffer },
     ];
+    const funnelOutcomes = {
+      won: statusCounts['WON'] || 0,
+      lost: statusCounts['LOST'] || 0,
+    };
 
     // Agent performance (group by agentName, filtered by date range)
     const agentStats = await prisma.crmLead.groupBy({
@@ -176,6 +184,7 @@ export async function GET(request: NextRequest) {
         conversionRate,
       },
       funnel,
+      funnelOutcomes,
       agents,
       activeAgentsList,
     });

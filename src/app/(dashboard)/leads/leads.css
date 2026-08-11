@@ -179,6 +179,23 @@
   margin-top: 4px;
 }
 
+/* WON/LOST rendered as parallel exits stacked in the last funnel column */
+.funnel-outcomes {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.funnel-outcomes .funnel-step {
+  flex: 1;
+  padding: 10px 16px;
+}
+
+.funnel-outcomes .funnel-step-count {
+  font-size: 18px;
+}
+
 /* Dashboard Split Grid */
 .dashboard-grid-crm {
   display: grid;

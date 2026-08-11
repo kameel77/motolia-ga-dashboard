@@ -47,6 +47,11 @@ interface FunnelStage {
   count: number;
 }
 
+interface FunnelOutcomes {
+  won: number;
+  lost: number;
+}
+
 interface AgentStat {
   name: string;
   leads: number;
@@ -69,6 +74,7 @@ export default function LeadsPage() {
     conversionRate: 0,
   });
   const [funnel, setFunnel] = useState<FunnelStage[]>([]);
+  const [funnelOutcomes, setFunnelOutcomes] = useState<FunnelOutcomes>({ won: 0, lost: 0 });
   const [agents, setAgents] = useState<AgentStat[]>([]);
   const [activeAgentsList, setActiveAgentsList] = useState<string[]>([]);
   
@@ -77,6 +83,7 @@ export default function LeadsPage() {
   const [customEndDate, setCustomEndDate] = useState<string>('');
   
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState<string>('');
@@ -164,13 +171,17 @@ export default function LeadsPage() {
         setPagination(data.pagination);
         setKpis(data.kpis);
         setFunnel(data.funnel);
+        setFunnelOutcomes(data.funnelOutcomes ?? { won: 0, lost: 0 });
         setAgents(data.agents);
         setActiveAgentsList(data.activeAgentsList);
+        setError(false);
       } else {
         console.error('Failed to fetch leads');
+        setError(true);
       }
     } catch (err) {
       console.error('Error fetching leads:', err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -291,6 +302,13 @@ export default function LeadsPage() {
         )}
       </div>
 
+      {error && !loading && (
+        <div className="fetch-error-banner">
+          <span>Nie udało się pobrać danych leadów. Sprawdź połączenie i spróbuj ponownie.</span>
+          <button type="button" onClick={fetchLeads}>Spróbuj ponownie</button>
+        </div>
+      )}
+
       {/* KPI stats grid */}
       <div className="leads-kpis">
         <div className="kpi-card-crm total">
@@ -310,27 +328,27 @@ export default function LeadsPage() {
         </div>
 
         <div className="kpi-card-crm won">
-          <div className="kpi-label">Aktywne wnioski</div>
+          <div className="kpi-label">Wygrane</div>
           <div className="kpi-value-container">
             <div className="kpi-value">{kpis.wonLeads}</div>
           </div>
-          <div className="kpi-subtext">Zaakceptowane wnioski finansowania</div>
+          <div className="kpi-subtext">Leady ze statusem wygrany</div>
         </div>
 
         <div className="kpi-card-crm value">
-          <div className="kpi-label">Wartość wniosków</div>
+          <div className="kpi-label">Wartość wygranych</div>
           <div className="kpi-value-container">
             <div className="kpi-value" style={{ color: 'var(--accent-green)' }}>{formatPLN(kpis.totalWonValue)}</div>
           </div>
-          <div className="kpi-subtext">Całkowita wartość aktywnych wniosków</div>
+          <div className="kpi-subtext">Łączna wartość wygranych leadów</div>
         </div>
 
         <div className="kpi-card-crm cr">
-          <div className="kpi-label">Konwersja wnioski</div>
+          <div className="kpi-label">Konwersja</div>
           <div className="kpi-value-container">
             <div className="kpi-value">{kpis.conversionRate}%</div>
           </div>
-          <div className="kpi-subtext">Współczynnik konwersji wniosków (CR%)</div>
+          <div className="kpi-subtext">Wygrane / wszystkie leady (CR%)</div>
         </div>
       </div>
 
@@ -350,13 +368,40 @@ export default function LeadsPage() {
                   <div className="funnel-step-fill" style={{ width: `${percentage}%` }} />
                 </div>
                 <div className="funnel-step-pct">
-                  {stage.stage !== 'NEW' && kpis.totalLeads > 0 
-                    ? `${Math.round((stage.count / kpis.totalLeads) * 100)}% ogółu` 
+                  {stage.stage !== 'NEW' && kpis.totalLeads > 0
+                    ? `${Math.round((stage.count / kpis.totalLeads) * 100)}% ogółu`
                     : 'Krok wejściowy'}
                 </div>
               </div>
             );
           })}
+          {/* Outcomes: WON and LOST are parallel exits, not sequential stages */}
+          <div className="funnel-outcomes">
+            <div className="funnel-step WON">
+              <div className="funnel-step-header">
+                <span className="funnel-step-name">Wygrane</span>
+                <span className="funnel-step-count">{funnelOutcomes.won}</span>
+              </div>
+              <div className="funnel-step-bar">
+                <div className="funnel-step-fill" style={{ width: `${Math.round((funnelOutcomes.won / maxFunnelCount) * 100)}%` }} />
+              </div>
+              <div className="funnel-step-pct">
+                {kpis.totalLeads > 0 ? `${Math.round((funnelOutcomes.won / kpis.totalLeads) * 100)}% ogółu` : '—'}
+              </div>
+            </div>
+            <div className="funnel-step LOST">
+              <div className="funnel-step-header">
+                <span className="funnel-step-name">Przegrane</span>
+                <span className="funnel-step-count">{funnelOutcomes.lost}</span>
+              </div>
+              <div className="funnel-step-bar">
+                <div className="funnel-step-fill" style={{ width: `${Math.round((funnelOutcomes.lost / maxFunnelCount) * 100)}%` }} />
+              </div>
+              <div className="funnel-step-pct">
+                {kpis.totalLeads > 0 ? `${Math.round((funnelOutcomes.lost / kpis.totalLeads) * 100)}% ogółu` : '—'}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
