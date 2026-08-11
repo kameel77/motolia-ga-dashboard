@@ -77,10 +77,17 @@ function mapThuliumStatus(statusName: string | null): CrmLeadStatus {
 
 export async function POST(request: NextRequest) {
   // 1. Basic Token Auth
+  // Fail closed: no shared default token. An unset GA_ANALYTICS_API_KEY
+  // rejects every request instead of accepting a value published in this repo.
   const authHeader = request.headers.get('authorization');
-  const expectedToken = `Bearer ${process.env.GA_ANALYTICS_API_KEY || 'test-analytics-key'}`;
-  
-  if (!authHeader || authHeader !== expectedToken) {
+  const apiKey = process.env.GA_ANALYTICS_API_KEY;
+
+  if (!apiKey) {
+    console.error('[Webhook CRM] GA_ANALYTICS_API_KEY is not set — rejecting request');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -154,7 +161,7 @@ export async function POST(request: NextRequest) {
         capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
 
         const dateHour = `${capturedAt.getUTCFullYear()}${String(capturedAt.getUTCMonth() + 1).padStart(2, '0')}${String(capturedAt.getUTCDate()).padStart(2, '0')}${String(capturedAt.getUTCHours()).padStart(2, '0')}${capturedAt.getUTCMinutes() < 30 ? '00' : '30'}`;
-        const eventName = lead.source === 'PHONE' ? 'phone_call' : 'form_submission';
+        const eventName = lead.source === 'PHONE' ? 'crm_lead_phone' : 'crm_lead_form';
 
         // 1. Increment TrafficByHour conversions
         const trafficRow = await prisma.trafficByHour.findFirst({
@@ -255,7 +262,7 @@ export async function POST(request: NextRequest) {
           await prisma.conversionEvent.create({
             data: {
               capturedAt,
-              eventName: 'phone_call',
+              eventName: 'crm_lead_phone',
               source: 'crm_connector',
               medium: 'phone',
               count: 1
