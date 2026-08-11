@@ -245,10 +245,17 @@ async function invalidateCache(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const THULIUM_USERNAME = process.env.THULIUM_USERNAME || 'api_user_analytics';
-const THULIUM_API_KEY = process.env.THULIUM_API_KEY || 'BgytA1KGyqU7225k2XJjhSkB7C1DEZBX3+9S1XlEmWs=';
+const THULIUM_API_KEY = process.env.THULIUM_API_KEY;
 const THULIUM_INSTANCE = process.env.THULIUM_INSTANCE || 'motolia';
 
+// No hardcoded fallback — the key must come from the environment.
+// A missing key must not take the worker down: GA4 collection has to keep
+// running, and this module is also imported by /api/sync, where a top-level
+// throw would break the route. CRM sync is skipped with a loud log instead.
 async function fetchThulium(path: string): Promise<any> {
+  if (!THULIUM_API_KEY) {
+    throw new Error('THULIUM_API_KEY environment variable is required');
+  }
   const auth = Buffer.from(`${THULIUM_USERNAME}:${THULIUM_API_KEY}`).toString('base64');
   const url = `https://${THULIUM_INSTANCE}.thulium.com/api${path}`;
   const res = await fetch(url, {
@@ -285,28 +292,32 @@ function parseWarsawDate(dateStr: string | null | undefined): Date {
 function mapThuliumStatus(statusName: string | null): "NEW" | "IN_PROGRESS" | "OFFER" | "WON" | "LOST" {
   if (!statusName) return "NEW";
   const s = statusName.toLowerCase();
-  
+
+  // Explicit win markers checked first so "zamknięte - wygrany" maps to WON
+  // before the generic "zamkni" LOST check below. Thulium statuses:
+  // "zamknięte", "zamknięte - wygrany", "zamknięty - przegrany", "zamknięty - spam".
   if (
-    s.includes("odrzucon") || 
-    s.includes("przegran") || 
-    s.includes("lost") || 
-    s.includes("spam") || 
-    s.includes("anulowan") ||
-    s.includes("rezygnac") ||
-    s.includes("bez powodzenia")
-  ) {
-    return "LOST";
-  }
-  
-  if (
-    s.includes("wygran") || 
-    s.includes("sukces") || 
-    s.includes("sprzedan") || 
+    s.includes("wygran") ||
+    s.includes("sukces") ||
+    s.includes("sprzedan") ||
     s.includes("zaakceptowane") ||
-    s.includes("won") ||
-    (s.includes("zamkni") || s.includes("zamknięty"))
+    s.includes("won")
   ) {
     return "WON";
+  }
+
+  if (
+    s.includes("odrzucon") ||
+    s.includes("przegran") ||
+    s.includes("lost") ||
+    s.includes("spam") ||
+    s.includes("anulowan") ||
+    s.includes("rezygnac") ||
+    s.includes("bez powodzenia") ||
+    // Plain "zamknięte" without a win marker = closed without a sale
+    s.includes("zamkni")
+  ) {
+    return "LOST";
   }
   
   if (
@@ -374,7 +385,37 @@ function extractThuliumDetails(ticket: any) {
   };
 }
 
+const THULIUM_PAGE_LIMIT = 100;
+const THULIUM_MAX_PAGES = 10;
+const THULIUM_LOOKBACK_DAYS = 7;
+
+/**
+ * Paginate a Thulium list endpoint (newest first) until records are older
+ * than the lookback window, the page is short, or the page cap is reached.
+ */
+async function fetchThuliumPaged(basePath: string, dateField: string): Promise<any[]> {
+  const cutoff = Date.now() - THULIUM_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+  const items: any[] = [];
+  for (let page = 0; page < THULIUM_MAX_PAGES; page++) {
+    const res = await fetchThulium(`${basePath}?limit=${THULIUM_PAGE_LIMIT}&offset=${page * THULIUM_PAGE_LIMIT}`);
+    const batch = res.result || [];
+    if (batch.length === 0) break;
+    items.push(...batch);
+    const oldestDate = batch[batch.length - 1]?.[dateField];
+    if (oldestDate && parseWarsawDate(oldestDate).getTime() < cutoff) break;
+    if (batch.length < THULIUM_PAGE_LIMIT) break;
+  }
+  return items;
+}
+
 async function collectThulium(): Promise<void> {
+  if (!THULIUM_API_KEY) {
+    console.error(
+      `[Cron] ${ts()} THULIUM_API_KEY is not set — skipping CRM sync. ` +
+        `Lead and call data will be stale. GA4 collection continues.`
+    );
+    return;
+  }
   console.log(`[Cron] ${ts()} Synchronizing Thulium CRM data...`);
   try {
     // 1. Fetch customers for lookup
@@ -389,9 +430,8 @@ async function collectThulium(): Promise<void> {
       });
     });
 
-    // 2. Fetch connections (limit to 100 for recent ones, which is fast)
-    const callRes = await fetchThulium("/connections?limit=100");
-    const calls = callRes.result || [];
+    // 2. Fetch connections (paginated over the lookback window)
+    const calls = await fetchThuliumPaged("/connections", "date");
     let callsImported = 0;
 
     for (const call of calls) {
@@ -439,7 +479,7 @@ async function collectThulium(): Promise<void> {
         const existingConv = await prisma.conversionEvent.findFirst({
           where: {
             capturedAt,
-            eventName: "phone_call",
+            eventName: "crm_lead_phone",
             source: "crm_connector"
           }
         });
@@ -448,7 +488,7 @@ async function collectThulium(): Promise<void> {
           await prisma.conversionEvent.create({
             data: {
               capturedAt,
-              eventName: "phone_call",
+              eventName: "crm_lead_phone",
               source: "crm_connector",
               medium: "phone",
               count: 1
@@ -459,9 +499,8 @@ async function collectThulium(): Promise<void> {
       callsImported++;
     }
 
-    // 3. Fetch tickets (limit to 100 for recent ones, which is fast)
-    const ticketRes = await fetchThulium("/tickets?limit=100");
-    const tickets = ticketRes.result || [];
+    // 3. Fetch tickets (paginated over the lookback window)
+    const tickets = await fetchThuliumPaged("/tickets", "created_at");
     let ticketsImported = 0;
 
     for (const ticket of tickets) {
@@ -521,7 +560,9 @@ async function collectThulium(): Promise<void> {
         capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
 
         const dateHour = `${capturedAt.getUTCFullYear()}${String(capturedAt.getUTCMonth() + 1).padStart(2, "0")}${String(capturedAt.getUTCDate()).padStart(2, "0")}${String(capturedAt.getUTCHours()).padStart(2, "0")}${capturedAt.getUTCMinutes() < 30 ? "00" : "30"}`;
-        const eventName = sourceVal === "PHONE" ? "phone_call" : "form_submission";
+        // CRM events use distinct names so they are never double-counted
+        // with GA4 events (form_submission / phone_call_click)
+        const eventName = sourceVal === "PHONE" ? "crm_lead_phone" : "crm_lead_form";
 
         const trafficRow = await prisma.trafficByHour.findFirst({ where: { dateHour } });
         if (trafficRow) {

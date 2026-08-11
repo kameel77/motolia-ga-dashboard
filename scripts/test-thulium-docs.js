@@ -1,7 +1,8 @@
 const https = require('https');
 
 const USERNAME = 'api_user_analytics';
-const API_KEY = 'BgytA1KGyqU7225k2XJjhSkB7C1DEZBX3+9S1XlEmWs=';
+const API_KEY = process.env.THULIUM_API_KEY;
+if (!API_KEY) { console.error('THULIUM_API_KEY env var is required'); process.exit(1); }
 const INSTANCE = 'motolia';
 
 function fetchUrl(url, method = 'GET') {

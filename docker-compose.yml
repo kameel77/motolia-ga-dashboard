@@ -13,6 +13,11 @@ services:
       - AUTH_PASSWORD=${AUTH_PASSWORD}
       - CRON_INTERVAL_MINUTES=${CRON_INTERVAL_MINUTES:-5}
       - JWT_SECRET=${JWT_SECRET}
+      - THULIUM_USERNAME=${THULIUM_USERNAME:-api_user_analytics}
+      - THULIUM_API_KEY=${THULIUM_API_KEY}
+      - THULIUM_INSTANCE=${THULIUM_INSTANCE:-motolia}
+      - GA_ANALYTICS_API_KEY=${GA_ANALYTICS_API_KEY}
+      - GSC_SITE_URL=${GSC_SITE_URL:-https://motolia.pl/}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://analytics.motolia.pl}
       - NODE_ENV=production
     networks:
