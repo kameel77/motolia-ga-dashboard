@@ -67,7 +67,11 @@ export default function ConversionsPage() {
   ];
 
   const funnelColors = ['#3b82f6', '#8b5cf6', '#10b981'];
-  const funnelWidths = ['100%', '70%', '40%'];
+  // Bar widths proportional to the first (widest) funnel step
+  const funnelBase = funnel[0]?.value || 1;
+  const funnelWidths = funnel.map(
+    (step) => `${Math.max(Math.round((step.value / funnelBase) * 100), 2)}%`
+  );
 
   const chartData =
     data?.daily?.map((d) => ({

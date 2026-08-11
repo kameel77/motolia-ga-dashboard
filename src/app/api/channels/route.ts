@@ -62,40 +62,61 @@ export async function GET(request: NextRequest) {
     whereClause.medium = medium;
   }
 
-  const channelData = await prisma.trafficBySource.groupBy({
-    by: ['source', 'medium'],
+  const trafficRows = await prisma.trafficBySource.findMany({
     where: whereClause,
-    _sum: {
+    select: {
+      source: true,
+      medium: true,
       sessions: true,
       users: true,
-      newUsers: true,
       conversions: true,
-    },
-    _avg: {
       bounceRate: true,
       engagementRate: true,
     },
-    orderBy: {
-      _sum: { sessions: 'desc' },
-    },
   });
 
-  const rows = channelData.map((ch) => {
-    const sessions = ch._sum.sessions ?? 0;
-    const conversions = ch._sum.conversions ?? 0;
-    const source = ch.source;
-    const medium = ch.medium;
-    return {
-      sourceMedium: `${source} / ${medium}`,
-      channel: getChannelGroup(source, medium),
-      sessions,
-      users: ch._sum.users ?? 0,
-      bounceRate: Math.round((ch._avg.bounceRate ?? 0) * 10000) / 100,
-      engagementRate: Math.round((ch._avg.engagementRate ?? 0) * 10000) / 100,
-      conversions,
-      conversionRate: sessions > 0 ? Math.round((conversions / sessions) * 10000) / 100 : 0,
+  // Group in JS to compute session-weighted rates (plain _avg skews toward low-traffic days)
+  const groups = new Map<string, {
+    source: string;
+    medium: string;
+    sessions: number;
+    users: number;
+    conversions: number;
+    bounceWeighted: number;
+    engagementWeighted: number;
+  }>();
+
+  for (const r of trafficRows) {
+    const key = `${r.source} / ${r.medium}`;
+    const g = groups.get(key) ?? {
+      source: r.source,
+      medium: r.medium,
+      sessions: 0,
+      users: 0,
+      conversions: 0,
+      bounceWeighted: 0,
+      engagementWeighted: 0,
     };
-  });
+    g.sessions += r.sessions;
+    g.users += r.users;
+    g.conversions += r.conversions;
+    g.bounceWeighted += r.sessions * r.bounceRate;
+    g.engagementWeighted += r.sessions * r.engagementRate;
+    groups.set(key, g);
+  }
+
+  const rows = Array.from(groups.values())
+    .map((g) => ({
+      sourceMedium: `${g.source} / ${g.medium}`,
+      channel: getChannelGroup(g.source, g.medium),
+      sessions: g.sessions,
+      users: g.users,
+      bounceRate: g.sessions > 0 ? Math.round((g.bounceWeighted / g.sessions) * 10000) / 100 : 0,
+      engagementRate: g.sessions > 0 ? Math.round((g.engagementWeighted / g.sessions) * 10000) / 100 : 0,
+      conversions: g.conversions,
+      conversionRate: g.sessions > 0 ? Math.round((g.conversions / g.sessions) * 10000) / 100 : 0,
+    }))
+    .sort((a, b) => b.sessions - a.sessions);
 
   const data = { rows };
 

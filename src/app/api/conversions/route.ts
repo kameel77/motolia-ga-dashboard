@@ -113,21 +113,27 @@ export async function GET(request: NextRequest) {
     };
   });
 
+  // GA4 events only — CRM events (crm_lead_*) describe the same leads
+  // and are reported separately to avoid double counting
   const formSubmissions = byEventName
     .filter((e) => e.eventName === 'form_submission')
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   const phoneCalls = byEventName
-    .filter((e) => e.eventName === 'phone_call')
+    .filter((e) => e.eventName === 'phone_call_click')
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   const total = formSubmissions + phoneCalls;
 
-  const trafficAgg = await prisma.trafficBySource.aggregate({
+  const trafficRows = await prisma.trafficBySource.findMany({
     where: { capturedAt: { gte: realUtcStartDate, lte: realUtcNow } },
-    _sum: { sessions: true },
+    select: { sessions: true, engagementRate: true },
   });
-  const totalSessions = trafficAgg._sum.sessions ?? 0;
+  const totalSessions = trafficRows.reduce((sum, r) => sum + r.sessions, 0);
+  // Real engaged sessions: session-weighted engagementRate from GA4
+  const engagedSessions = Math.round(
+    trafficRows.reduce((sum, r) => sum + r.sessions * (r.engagementRate ?? 0), 0)
+  );
   const conversionRate = totalSessions > 0 ? Math.round((total / totalSessions) * 10000) / 100 : 0;
 
   // 2. Previous Period aggregations
@@ -142,7 +148,7 @@ export async function GET(request: NextRequest) {
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   const prevPhoneCalls = prevConversionEvents
-    .filter((e) => e.eventName === 'phone_call')
+    .filter((e) => e.eventName === 'phone_call_click')
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   const prevTotal = prevFormSubmissions + prevPhoneCalls;
@@ -173,9 +179,9 @@ export async function GET(request: NextRequest) {
       crmByDate.set(dateKey, { crmForms: 0, crmPhones: 0 });
     }
     const entry = crmByDate.get(dateKey)!;
-    if (ev.eventName === 'form_submission') {
+    if (ev.eventName === 'crm_lead_form') {
       entry.crmForms += ev.count;
-    } else if (ev.eventName === 'phone_call') {
+    } else if (ev.eventName === 'crm_lead_phone') {
       entry.crmPhones += ev.count;
     }
   }
@@ -213,7 +219,7 @@ export async function GET(request: NextRequest) {
     events,
     funnel: [
       { label: 'Sesje', value: totalSessions },
-      { label: 'Zaangażowani', value: Math.round(totalSessions * 0.65) },
+      { label: 'Zaangażowani', value: engagedSessions },
       { label: 'Konwersje', value: total },
     ],
   };

@@ -38,6 +38,42 @@ function calcDelta(current: number, previous: number): number {
   return Math.round(((current - previous) / previous) * 10000) / 100;
 }
 
+// GA4-sourced event names only. CRM events (crm_lead_form, crm_lead_phone)
+// describe the same leads and must not be added on top of GA4 counts.
+const GA4_FORM_EVENTS = ['form_submission', 'generate_lead'];
+const GA4_PHONE_EVENTS = ['phone_call_click'];
+
+interface TrafficRow {
+  sessions: number;
+  users: number;
+  newUsers: number;
+  conversions: number;
+  bounceRate: number;
+  engagementRate: number;
+}
+
+// Sums plus session-weighted rates (plain _avg would skew toward tiny sources)
+function summarizeTraffic(rows: TrafficRow[]) {
+  const sessions = rows.reduce((s, r) => s + r.sessions, 0);
+  return {
+    sessions,
+    users: rows.reduce((s, r) => s + r.users, 0),
+    newUsers: rows.reduce((s, r) => s + r.newUsers, 0),
+    conversions: rows.reduce((s, r) => s + r.conversions, 0),
+    bounceRate: sessions > 0 ? rows.reduce((s, r) => s + r.sessions * r.bounceRate, 0) / sessions : 0,
+    engagementRate: sessions > 0 ? rows.reduce((s, r) => s + r.sessions * r.engagementRate, 0) / sessions : 0,
+  };
+}
+
+const trafficSelect = {
+  sessions: true,
+  users: true,
+  newUsers: true,
+  conversions: true,
+  bounceRate: true,
+  engagementRate: true,
+} as const;
+
 export async function GET(request: NextRequest) {
   if (!(await verifyAuth(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -58,11 +94,12 @@ export async function GET(request: NextRequest) {
   const prevStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000);
 
   // 1. Current Period aggregations
-  const currentTraffic = await prisma.trafficBySource.aggregate({
-    where: { capturedAt: { gte: startDate, lte: now } },
-    _sum: { sessions: true, users: true, newUsers: true, conversions: true },
-    _avg: { bounceRate: true, engagementRate: true },
-  });
+  const currentTraffic = summarizeTraffic(
+    await prisma.trafficBySource.findMany({
+      where: { capturedAt: { gte: startDate, lte: now } },
+      select: trafficSelect,
+    })
+  );
 
   const currentConversionEvents = await prisma.conversionEvent.groupBy({
     by: ['eventName'],
@@ -71,19 +108,20 @@ export async function GET(request: NextRequest) {
   });
 
   const formSubmissions = currentConversionEvents
-    .filter((e) => e.eventName.toLowerCase().includes('form') || e.eventName.toLowerCase().includes('lead'))
+    .filter((e) => GA4_FORM_EVENTS.includes(e.eventName))
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   const phoneCalls = currentConversionEvents
-    .filter((e) => e.eventName.toLowerCase().includes('phone') || e.eventName.toLowerCase().includes('call'))
+    .filter((e) => GA4_PHONE_EVENTS.includes(e.eventName))
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   // 2. Previous Period aggregations
-  const prevTraffic = await prisma.trafficBySource.aggregate({
-    where: { capturedAt: { gte: prevStartDate, lt: startDate } },
-    _sum: { sessions: true, users: true, newUsers: true, conversions: true },
-    _avg: { bounceRate: true, engagementRate: true },
-  });
+  const prevTraffic = summarizeTraffic(
+    await prisma.trafficBySource.findMany({
+      where: { capturedAt: { gte: prevStartDate, lt: startDate } },
+      select: trafficSelect,
+    })
+  );
 
   const prevConversionEvents = await prisma.conversionEvent.groupBy({
     by: ['eventName'],
@@ -92,11 +130,11 @@ export async function GET(request: NextRequest) {
   });
 
   const prevFormSubmissions = prevConversionEvents
-    .filter((e) => e.eventName.toLowerCase().includes('form') || e.eventName.toLowerCase().includes('lead'))
+    .filter((e) => GA4_FORM_EVENTS.includes(e.eventName))
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   const prevPhoneCalls = prevConversionEvents
-    .filter((e) => e.eventName.toLowerCase().includes('phone') || e.eventName.toLowerCase().includes('call'))
+    .filter((e) => GA4_PHONE_EVENTS.includes(e.eventName))
     .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
 
   // 3. Trend from DailySnapshot
@@ -106,21 +144,21 @@ export async function GET(request: NextRequest) {
   });
 
   // Calculate current KPIs
-  const sessions = currentTraffic._sum.sessions ?? 0;
-  const users = currentTraffic._sum.users ?? 0;
-  const newUsers = currentTraffic._sum.newUsers ?? 0;
-  const conversions = currentTraffic._sum.conversions ?? 0;
-  const bounceRate = Math.round((currentTraffic._avg.bounceRate ?? 0) * 10000) / 100;
-  const engagementRate = Math.round((currentTraffic._avg.engagementRate ?? 0) * 10000) / 100;
+  const sessions = currentTraffic.sessions;
+  const users = currentTraffic.users;
+  const newUsers = currentTraffic.newUsers;
+  const conversions = currentTraffic.conversions;
+  const bounceRate = Math.round(currentTraffic.bounceRate * 10000) / 100;
+  const engagementRate = Math.round(currentTraffic.engagementRate * 10000) / 100;
   const conversionRate = sessions > 0 ? Math.round((conversions / sessions) * 10000) / 100 : 0;
 
   // Calculate previous KPIs
-  const prevSessions = prevTraffic._sum.sessions ?? 0;
-  const prevUsers = prevTraffic._sum.users ?? 0;
-  const prevNewUsers = prevTraffic._sum.newUsers ?? 0;
-  const prevConversions = prevTraffic._sum.conversions ?? 0;
-  const prevBounceRate = Math.round((prevTraffic._avg.bounceRate ?? 0) * 10000) / 100;
-  const prevEngagementRate = Math.round((prevTraffic._avg.engagementRate ?? 0) * 10000) / 100;
+  const prevSessions = prevTraffic.sessions;
+  const prevUsers = prevTraffic.users;
+  const prevNewUsers = prevTraffic.newUsers;
+  const prevConversions = prevTraffic.conversions;
+  const prevBounceRate = Math.round(prevTraffic.bounceRate * 10000) / 100;
+  const prevEngagementRate = Math.round(prevTraffic.engagementRate * 10000) / 100;
   const prevConversionRate = prevSessions > 0 ? Math.round((prevConversions / prevSessions) * 10000) / 100 : 0;
 
   // Map to the format frontend expects
