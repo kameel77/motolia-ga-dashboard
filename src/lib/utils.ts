@@ -100,6 +100,65 @@ export function getWarsawDateString(date: Date = new Date()): string {
   return formatter.format(date);
 }
 
+export type Period = "today" | "7d" | "30d" | "90d";
+
+export const PERIODS: Period[] = ["today", "7d", "30d", "90d"];
+
+export function getPeriodDays(period: Period): number {
+  switch (period) {
+    case "today":
+      return 1;
+    case "7d":
+      return 7;
+    case "30d":
+      return 30;
+    case "90d":
+      return 90;
+  }
+}
+
+/**
+ * Format a Date built from UTC clock digits as YYYY-MM-DD.
+ * Use for the synthetic "Warsaw wall clock stored as UTC" dates this app
+ * passes around — Intl would shift them by the Warsaw offset.
+ */
+function toUtcDateString(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    d.getUTCDate()
+  ).padStart(2, "0")}`;
+}
+
+/**
+ * Inclusive calendar window for a period, in Europe/Warsaw.
+ *
+ * `windowOffset` 0 is the current window, 1 the one immediately before it
+ * (used for the period-over-period comparison). A window of N days always
+ * spans exactly N calendar days, today included.
+ *
+ * Returns both YYYY-MM-DD strings (for GA4 date ranges) and UTC-midnight
+ * Dates (for querying DailySnapshot.date, which is stored the same way).
+ */
+export function getPeriodRange(
+  period: Period,
+  windowOffset = 0
+): { start: string; end: string; startDate: Date; endDate: Date } {
+  const days = getPeriodDays(period);
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  const today = getWarsawNow();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const endDate = new Date(today.getTime() - windowOffset * days * DAY_MS);
+  const startDate = new Date(endDate.getTime() - (days - 1) * DAY_MS);
+
+  return {
+    start: toUtcDateString(startDate),
+    end: toUtcDateString(endDate),
+    startDate,
+    endDate,
+  };
+}
+
 /**
  * Convert a period string into a start Date.
  * Supported values: 'today', '7d', '30d', '90d'.

@@ -143,6 +143,25 @@ model DailySnapshot {
   @@map("daily_snapshots")
 }
 
+model PeriodSummary {
+  id                 Int      @id @default(autoincrement())
+  period             String   // 'today' | '7d' | '30d' | '90d'
+  windowOffset       Int      @default(0) // 0 = current window, 1 = the one before it
+  startDate          DateTime @db.Date
+  endDate            DateTime @db.Date
+  sessions           Int      @default(0)
+  users              Int      @default(0)
+  newUsers           Int      @default(0)
+  bounceRate         Float    @default(0)
+  conversions        Int      @default(0)
+  avgSessionDuration Float    @default(0)
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
+
+  @@unique([period, windowOffset])
+  @@map("period_summaries")
+}
+
 model ImportLog {
   id          Int      @id @default(autoincrement())
   filename    String

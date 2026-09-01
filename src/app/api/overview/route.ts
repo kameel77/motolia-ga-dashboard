@@ -2,77 +2,87 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
-import { getWarsawNow } from '@/lib/utils';
+import { getPeriodRange, type Period } from '@/lib/utils';
 
-type Period = 'today' | '7d' | '30d' | '90d';
-
-function getStartDate(period: Period): Date {
-  const now = getWarsawNow();
-  now.setUTCHours(0, 0, 0, 0);
-  switch (period) {
-    case 'today':
-      return now;
-    case '7d':
-      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    case '30d':
-      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    case '90d':
-      return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-    default:
-      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  }
-}
-
-function getPeriodDays(period: Period): number {
-  switch (period) {
-    case 'today': return 1;
-    case '7d': return 7;
-    case '30d': return 30;
-    case '90d': return 90;
-    default: return 7;
-  }
-}
-
-function calcDelta(current: number, previous: number): number {
-  if (previous === 0) return current > 0 ? 100 : 0;
-  return Math.round(((current - previous) / previous) * 10000) / 100;
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // GA4-sourced event names only. CRM events (crm_lead_form, crm_lead_phone)
 // describe the same leads and must not be added on top of GA4 counts.
 const GA4_FORM_EVENTS = ['form_submission', 'generate_lead'];
 const GA4_PHONE_EVENTS = ['phone_call_click'];
 
-interface TrafficRow {
+interface Totals {
   sessions: number;
   users: number;
   newUsers: number;
-  conversions: number;
   bounceRate: number;
-  engagementRate: number;
+  conversions: number;
 }
 
-// Sums plus session-weighted rates (plain _avg would skew toward tiny sources)
-function summarizeTraffic(rows: TrafficRow[]) {
+/**
+ * Stand-in used only until the worker has written the PeriodSummary row for a
+ * window (at most one collection cycle after a deploy). Sessions, new users and
+ * conversions add up correctly across days; `users` does not — a visitor who
+ * returns on three days is counted three times — so this is a placeholder, not
+ * a second source of truth.
+ */
+async function fallbackTotals(startDate: Date, endDate: Date): Promise<Totals> {
+  const rows = await prisma.dailySnapshot.findMany({
+    where: { date: { gte: startDate, lte: endDate } },
+    select: { sessions: true, users: true, newUsers: true, bounceRate: true, conversions: true },
+  });
+
   const sessions = rows.reduce((s, r) => s + r.sessions, 0);
+
   return {
     sessions,
     users: rows.reduce((s, r) => s + r.users, 0),
     newUsers: rows.reduce((s, r) => s + r.newUsers, 0),
-    conversions: rows.reduce((s, r) => s + r.conversions, 0),
+    // Session-weighted: a plain average would let a quiet day count as much as a busy one.
     bounceRate: sessions > 0 ? rows.reduce((s, r) => s + r.sessions * r.bounceRate, 0) / sessions : 0,
-    engagementRate: sessions > 0 ? rows.reduce((s, r) => s + r.sessions * r.engagementRate, 0) / sessions : 0,
+    conversions: rows.reduce((s, r) => s + r.conversions, 0),
   };
 }
 
-const trafficSelect = {
-  sessions: true,
-  users: true,
-  newUsers: true,
-  conversions: true,
-  bounceRate: true,
-  engagementRate: true,
-} as const;
+async function getTotals(
+  period: Period,
+  windowOffset: number,
+  startDate: Date,
+  endDate: Date
+): Promise<Totals> {
+  const summary = await prisma.periodSummary.findUnique({
+    where: { period_windowOffset: { period, windowOffset } },
+  });
+
+  if (!summary) {
+    return fallbackTotals(startDate, endDate);
+  }
+
+  return {
+    sessions: summary.sessions,
+    users: summary.users,
+    newUsers: summary.newUsers,
+    bounceRate: summary.bounceRate,
+    conversions: summary.conversions,
+  };
+}
+
+async function countConversionEvents(
+  startDate: Date,
+  endDate: Date,
+  eventNames: string[]
+): Promise<number> {
+  const rows = await prisma.conversionEvent.groupBy({
+    by: ['eventName'],
+    where: {
+      capturedAt: { gte: startDate, lt: new Date(endDate.getTime() + DAY_MS) },
+      eventName: { in: eventNames },
+    },
+    _sum: { count: true },
+  });
+
+  return rows.reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
+}
 
 export async function GET(request: NextRequest) {
   if (!(await verifyAuth(request))) {
@@ -88,94 +98,57 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(cached);
   }
 
-  const now = getWarsawNow();
-  const startDate = getStartDate(period);
-  const days = getPeriodDays(period);
-  const prevStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000);
+  const current = getPeriodRange(period, 0);
+  const previous = getPeriodRange(period, 1);
 
-  // 1. Current Period aggregations
-  const currentTraffic = summarizeTraffic(
-    await prisma.trafficBySource.findMany({
-      where: { capturedAt: { gte: startDate, lte: now } },
-      select: trafficSelect,
-    })
-  );
+  // KPI totals come from GA4 reports run over the whole window, cached by the
+  // worker in PeriodSummary. They are deliberately NOT summed from
+  // TrafficBySource: GA4's source breakdown adds overlapping "(not set)" and
+  // "(data not available)" rows and counts a user once per source, which
+  // inflated these cards by 57-71%.
+  const [totals, prevTotals] = await Promise.all([
+    getTotals(period, 0, current.startDate, current.endDate),
+    getTotals(period, 1, previous.startDate, previous.endDate),
+  ]);
 
-  const currentConversionEvents = await prisma.conversionEvent.groupBy({
-    by: ['eventName'],
-    where: { capturedAt: { gte: startDate, lte: now } },
-    _sum: { count: true },
-  });
+  const [formSubmissions, phoneCalls, prevFormSubmissions, prevPhoneCalls, trend] =
+    await Promise.all([
+      countConversionEvents(current.startDate, current.endDate, GA4_FORM_EVENTS),
+      countConversionEvents(current.startDate, current.endDate, GA4_PHONE_EVENTS),
+      countConversionEvents(previous.startDate, previous.endDate, GA4_FORM_EVENTS),
+      countConversionEvents(previous.startDate, previous.endDate, GA4_PHONE_EVENTS),
+      prisma.dailySnapshot.findMany({
+        where: { date: { gte: current.startDate, lte: current.endDate } },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
 
-  const formSubmissions = currentConversionEvents
-    .filter((e) => GA4_FORM_EVENTS.includes(e.eventName))
-    .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
+  const bounceRate = Math.round(totals.bounceRate * 10000) / 100;
+  const prevBounceRate = Math.round(prevTotals.bounceRate * 10000) / 100;
 
-  const phoneCalls = currentConversionEvents
-    .filter((e) => GA4_PHONE_EVENTS.includes(e.eventName))
-    .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
+  const conversionRate =
+    totals.sessions > 0
+      ? Math.round((totals.conversions / totals.sessions) * 10000) / 100
+      : 0;
+  const prevConversionRate =
+    prevTotals.sessions > 0
+      ? Math.round((prevTotals.conversions / prevTotals.sessions) * 10000) / 100
+      : 0;
 
-  // 2. Previous Period aggregations
-  const prevTraffic = summarizeTraffic(
-    await prisma.trafficBySource.findMany({
-      where: { capturedAt: { gte: prevStartDate, lt: startDate } },
-      select: trafficSelect,
-    })
-  );
-
-  const prevConversionEvents = await prisma.conversionEvent.groupBy({
-    by: ['eventName'],
-    where: { capturedAt: { gte: prevStartDate, lt: startDate } },
-    _sum: { count: true },
-  });
-
-  const prevFormSubmissions = prevConversionEvents
-    .filter((e) => GA4_FORM_EVENTS.includes(e.eventName))
-    .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
-
-  const prevPhoneCalls = prevConversionEvents
-    .filter((e) => GA4_PHONE_EVENTS.includes(e.eventName))
-    .reduce((sum, e) => sum + (e._sum.count ?? 0), 0);
-
-  // 3. Trend from DailySnapshot
-  const trend = await prisma.dailySnapshot.findMany({
-    where: { date: { gte: startDate, lte: now } },
-    orderBy: { date: 'asc' },
-  });
-
-  // Calculate current KPIs
-  const sessions = currentTraffic.sessions;
-  const users = currentTraffic.users;
-  const newUsers = currentTraffic.newUsers;
-  const conversions = currentTraffic.conversions;
-  const bounceRate = Math.round(currentTraffic.bounceRate * 10000) / 100;
-  const engagementRate = Math.round(currentTraffic.engagementRate * 10000) / 100;
-  const conversionRate = sessions > 0 ? Math.round((conversions / sessions) * 10000) / 100 : 0;
-
-  // Calculate previous KPIs
-  const prevSessions = prevTraffic.sessions;
-  const prevUsers = prevTraffic.users;
-  const prevNewUsers = prevTraffic.newUsers;
-  const prevConversions = prevTraffic.conversions;
-  const prevBounceRate = Math.round(prevTraffic.bounceRate * 10000) / 100;
-  const prevEngagementRate = Math.round(prevTraffic.engagementRate * 10000) / 100;
-  const prevConversionRate = prevSessions > 0 ? Math.round((prevConversions / prevSessions) * 10000) / 100 : 0;
-
-  // Map to the format frontend expects
   const data = {
     sessions: {
-      value: sessions,
-      previousValue: prevSessions,
+      value: totals.sessions,
+      previousValue: prevTotals.sessions,
       sparkline: trend.map((t) => t.sessions),
     },
     users: {
-      value: users,
-      previousValue: prevUsers,
+      value: totals.users,
+      previousValue: prevTotals.users,
       sparkline: trend.map((t) => t.users),
     },
     newUsers: {
-      value: newUsers,
-      previousValue: prevNewUsers,
+      value: totals.newUsers,
+      previousValue: prevTotals.newUsers,
       sparkline: trend.map((t) => t.newUsers),
     },
     bounceRate: {
@@ -194,14 +167,16 @@ export async function GET(request: NextRequest) {
       sparkline: [],
     },
     totalConversions: {
-      value: conversions,
-      previousValue: prevConversions,
+      value: totals.conversions,
+      previousValue: prevTotals.conversions,
       sparkline: trend.map((t) => t.conversions),
     },
     conversionRate: {
       value: conversionRate,
       previousValue: prevConversionRate,
-      sparkline: trend.map((t) => (t.sessions > 0 ? Math.round((t.conversions / t.sessions) * 10000) / 100 : 0)),
+      sparkline: trend.map((t) =>
+        t.sessions > 0 ? Math.round((t.conversions / t.sessions) * 10000) / 100 : 0
+      ),
     },
     daily: trend.map((t) => ({
       date: t.date.toISOString().split('T')[0],

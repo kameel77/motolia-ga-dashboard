@@ -1,7 +1,13 @@
 import cron from "node-cron";
 import { prisma } from "../lib/prisma";
 import { invalidatePattern } from "../lib/redis";
-import { getWarsawNow, getWarsawDateString } from "../lib/utils";
+import {
+  getWarsawNow,
+  getWarsawDateString,
+  getPeriodRange,
+  PERIODS,
+  type Period,
+} from "../lib/utils";
 import {
   fetchRealtimeData,
   fetchDailyTrafficBySource,
@@ -11,6 +17,7 @@ import {
   fetchDailyTrafficByLandingPage,
   fetchDailyConversions,
   fetchDailySummary,
+  fetchPeriodSummary,
 } from "../lib/ga4-client";
 import { fetchGscData } from "../lib/gsc-client";
 
@@ -182,12 +189,22 @@ async function collectDailyTraffic(): Promise<void> {
   }
 }
 
+// GA4 keeps finalising a day for hours after midnight, so a day fetched only
+// while it was "today" stays frozen at whatever it looked like at 23:00 and is
+// never corrected. Re-fetch a short trailing window instead.
+const SUMMARY_BACKFILL_DAYS = 3;
+
 async function collectDailySummary(): Promise<void> {
   const today = todayString();
-  console.log(`[Cron] ${ts()} Collecting daily summary for ${today}...`);
+  const startDate = getWarsawDateString(
+    new Date(Date.now() - (SUMMARY_BACKFILL_DAYS - 1) * 24 * 60 * 60 * 1000)
+  );
+  console.log(
+    `[Cron] ${ts()} Collecting daily summary for ${startDate} -> ${today}...`
+  );
 
   try {
-    const rows = await fetchDailySummary(today, today);
+    const rows = await fetchDailySummary(startDate, today);
 
     for (const row of rows) {
       // GA4 returns date as "YYYYMMDD" string — parse it
@@ -223,6 +240,52 @@ async function collectDailySummary(): Promise<void> {
   } catch (err) {
     console.error(`[Cron] ${ts()} collectDailySummary error:`, err);
   }
+}
+
+/**
+ * Period-level totals straight from GA4, with no dimension breakdown.
+ *
+ * The overview KPIs used to sum TrafficBySource rows, which over-reports:
+ * GA4's source breakdown adds overlapping "(not set)" / "(data not available)"
+ * rows, and a user arriving from two sources is counted twice. Unique users
+ * over a multi-day window cannot be derived from stored daily rows at all, so
+ * each window is fetched as one report and cached here.
+ */
+async function collectPeriodSummaries(periods: Period[]): Promise<void> {
+  console.log(`[Cron] ${ts()} Collecting period summaries: ${periods.join(", ")}...`);
+
+  for (const period of periods) {
+    for (const windowOffset of [0, 1]) {
+      try {
+        const { start, end, startDate, endDate } = getPeriodRange(period, windowOffset);
+        const row = await fetchPeriodSummary(start, end);
+
+        const values = {
+          startDate,
+          endDate,
+          sessions: row.sessions,
+          users: row.totalUsers,
+          newUsers: row.newUsers,
+          bounceRate: row.bounceRate,
+          conversions: row.conversions,
+          avgSessionDuration: row.averageSessionDuration,
+        };
+
+        await prisma.periodSummary.upsert({
+          where: { period_windowOffset: { period, windowOffset } },
+          update: values,
+          create: { period, windowOffset, ...values },
+        });
+      } catch (err) {
+        console.error(
+          `[Cron] ${ts()} collectPeriodSummaries error (${period}, offset ${windowOffset}):`,
+          err
+        );
+      }
+    }
+  }
+
+  console.log(`[Cron] ${ts()} Period summaries saved`);
 }
 
 async function invalidateCache(): Promise<void> {
@@ -644,6 +707,9 @@ export async function runCollectionCycle(): Promise<void> {
 
   await collectRealtime();
   await collectDailyTraffic();
+  // Only "today" here — the longer windows barely move minute to minute and
+  // are refreshed by the hourly cycle instead.
+  await collectPeriodSummaries(["today"]);
   await collectThulium();
   await invalidateCache();
 
@@ -656,6 +722,7 @@ export async function runCollectionCycle(): Promise<void> {
 async function runHourlyCycle(): Promise<void> {
   console.log(`\n[Cron] ========== Hourly cycle start: ${ts()} ==========`);
   await collectDailySummary();
+  await collectPeriodSummaries(PERIODS.filter((p) => p !== "today"));
   await collectGsc();
   await invalidateCache();
   console.log(`[Cron] ========== Hourly cycle complete ==========\n`);

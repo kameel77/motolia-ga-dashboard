@@ -59,13 +59,6 @@ const PASMO_COLORS: Record<string, string> = {
 
 const DAYS = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'];
 
-function getNearest30MinBucket(hour: number, minute: number): { hour: number; minute: number } {
-  return {
-    hour,
-    minute: minute < 30 ? 0 : 30
-  };
-}
-
 function formatHour(h: number): string {
   return `${String(h).padStart(2, '0')}:00`;
 }
@@ -83,11 +76,8 @@ function CustomTooltip({
 }) {
   if (!active || !payload?.length) return null;
   
-  const hourSpots = spots?.filter((s) => {
-    const bucket = getNearest30MinBucket(s.hour, s.minute);
-    const labelParts = String(label).split(':').map(Number);
-    return bucket.hour === labelParts[0] && bucket.minute === labelParts[1];
-  }) ?? [];
+  const labelHour = Number(String(label).split(':')[0]);
+  const hourSpots = spots?.filter((s) => s.hour === labelHour) ?? [];
 
   return (
     <div className="chart-tooltip" style={{ minWidth: 180, maxWidth: 280 }}>
@@ -405,8 +395,7 @@ export default function TrendsPage() {
 
               {/* TV Spot Reference Lines */}
               {spots.map((spot, i) => {
-                const bucket = getNearest30MinBucket(spot.hour, spot.minute);
-                const bucketLabel = `${String(bucket.hour).padStart(2, '0')}:${String(bucket.minute).padStart(2, '0')}`;
+                const bucketLabel = `${String(spot.hour).padStart(2, '0')}:00`;
                 return (
                   <ReferenceLine
                     key={i}

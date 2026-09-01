@@ -102,6 +102,15 @@ export interface DailySummaryRow {
   averageSessionDuration: number;
 }
 
+export interface PeriodSummaryRow {
+  sessions: number;
+  totalUsers: number;
+  newUsers: number;
+  bounceRate: number;
+  conversions: number;
+  averageSessionDuration: number;
+}
+
 // ---------------------------------------------------------------------------
 // Client initialization
 // ---------------------------------------------------------------------------
@@ -371,6 +380,13 @@ export async function fetchDailyTrafficBySource(
 
 /**
  * Traffic broken down by hour for a given date (YYYY-MM-DD).
+ *
+ * Uses the `dateHour` dimension, NOT `dateHourMinute`. Per-minute rows cannot
+ * be summed into larger buckets: GA4 counts a session (and a user) in every
+ * minute it was active, so a ten-minute visit lands in ten rows. Summing them
+ * inflated this series roughly 4x — measured on 2026-08-31, `dateHourMinute`
+ * summed to 661 sessions against a real daily total of 172, while `dateHour`
+ * gave 187. The trade-off is 60-minute instead of 30-minute resolution.
  */
 export async function fetchDailyTrafficByHour(
   date: string
@@ -378,13 +394,13 @@ export async function fetchDailyTrafficByHour(
   const client = getClient();
   const property = getProperty();
 
-  console.log(`[GA4] Fetching traffic by hour and minute for ${date}...`);
+  console.log(`[GA4] Fetching traffic by hour for ${date}...`);
 
   try {
     const [response] = await client.runReport({
       property,
       dateRanges: [{ startDate: date, endDate: date }],
-      dimensions: [{ name: "dateHourMinute" }],
+      dimensions: [{ name: "dateHour" }],
       metrics: [
         { name: "sessions" },
         { name: "totalUsers" },
@@ -393,37 +409,14 @@ export async function fetchDailyTrafficByHour(
       returnPropertyQuota: true,
     });
 
-    const aggregated = new Map<string, { sessions: number; totalUsers: number; conversions: number }>();
-    
-    for (const row of response.rows || []) {
-      const dateHourMinute = safeString(row.dimensionValues?.[0]?.value); // "YYYYMMDDHHMM"
-      if (dateHourMinute.length < 12) continue;
-      
-      const dateHour = dateHourMinute.slice(0, 10); // "YYYYMMDDHH"
-      const minuteVal = parseInt(dateHourMinute.slice(10, 12), 10);
-      const roundedMinute = minuteVal < 30 ? "00" : "30";
-      const key = `${dateHour}${roundedMinute}`;
-      
-      const sessions = safeNumber(row.metricValues?.[0]?.value);
-      const totalUsers = safeNumber(row.metricValues?.[1]?.value);
-      const conversions = safeNumber(row.metricValues?.[2]?.value);
-      
-      const existing = aggregated.get(key);
-      if (existing) {
-        existing.sessions += sessions;
-        existing.totalUsers += totalUsers;
-        existing.conversions += conversions;
-      } else {
-        aggregated.set(key, { sessions, totalUsers, conversions });
-      }
-    }
-
-    return Array.from(aggregated.entries()).map(([key, val]) => ({
-      dateHour: key,
-      sessions: val.sessions,
-      totalUsers: val.totalUsers,
-      conversions: val.conversions,
-    }));
+    return (response.rows || [])
+      .map((row) => ({
+        dateHour: safeString(row.dimensionValues?.[0]?.value), // "YYYYMMDDHH"
+        sessions: safeNumber(row.metricValues?.[0]?.value),
+        totalUsers: safeNumber(row.metricValues?.[1]?.value),
+        conversions: safeNumber(row.metricValues?.[2]?.value),
+      }))
+      .filter((row) => row.dateHour.length === 10);
   } catch (err) {
     console.error("[GA4] fetchDailyTrafficByHour error:", err);
     throw err;
@@ -637,6 +630,55 @@ export async function fetchDailySummary(
     }));
   } catch (err) {
     console.error("[GA4] fetchDailySummary error:", err);
+    throw err;
+  }
+}
+
+/**
+ * Totals for a whole date range, with no dimension breakdown.
+ *
+ * This is the only shape that answers "how many unique users in the last 30
+ * days" — summing daily or per-source rows counts the same person once per day
+ * or once per source. On 2026-08-31 the unbroken total was 172 sessions / 139
+ * users, while the sessionSource x sessionMedium breakdown summed to 270 / 237
+ * because GA4 adds overlapping "(not set)" and "(data not available)" rows.
+ */
+export async function fetchPeriodSummary(
+  startDate: string,
+  endDate: string
+): Promise<PeriodSummaryRow> {
+  const client = getClient();
+  const property = getProperty();
+
+  console.log(`[GA4] Fetching period summary ${startDate} -> ${endDate}...`);
+
+  try {
+    const [response] = await client.runReport({
+      property,
+      dateRanges: [{ startDate, endDate }],
+      metrics: [
+        { name: "sessions" },
+        { name: "totalUsers" },
+        { name: "newUsers" },
+        { name: "bounceRate" },
+        { name: "conversions" },
+        { name: "averageSessionDuration" },
+      ],
+      returnPropertyQuota: true,
+    });
+
+    const row = response.rows?.[0];
+
+    return {
+      sessions: safeNumber(row?.metricValues?.[0]?.value),
+      totalUsers: safeNumber(row?.metricValues?.[1]?.value),
+      newUsers: safeNumber(row?.metricValues?.[2]?.value),
+      bounceRate: safeNumber(row?.metricValues?.[3]?.value),
+      conversions: safeNumber(row?.metricValues?.[4]?.value),
+      averageSessionDuration: safeNumber(row?.metricValues?.[5]?.value),
+    };
+  } catch (err) {
+    console.error("[GA4] fetchPeriodSummary error:", err);
     throw err;
   }
 }

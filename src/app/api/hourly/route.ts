@@ -124,65 +124,61 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  const getHourMinuteKey = (dh: string) => {
-    if (dh.length === 10) return dh.slice(-2) + '00';
-    return dh.slice(-4); // "HHMM"
+  // dateHour is "YYYYMMDDHH" for rows collected with the hourly GA4 dimension
+  // and "YYYYMMDDHHMM" for legacy 30-minute rows. Both key on the same hour;
+  // the two halves of a legacy hour are added together.
+  const groupByHour = (rows: typeof todayData) => {
+    const map = new Map<number, { sessions: number; users: number; conversions: number }>();
+    for (const row of rows) {
+      const hour = parseInt(row.dateHour.slice(8, 10), 10);
+      if (isNaN(hour)) continue;
+      const acc = map.get(hour);
+      if (acc) {
+        acc.sessions += row.sessions;
+        acc.users += row.users;
+        acc.conversions += row.conversions;
+      } else {
+        map.set(hour, {
+          sessions: row.sessions,
+          users: row.users,
+          conversions: row.conversions,
+        });
+      }
+    }
+    return map;
   };
 
-  const todayMap = new Map<string, (typeof todayData)[0]>();
-  for (const row of todayData) {
-    const key = getHourMinuteKey(row.dateHour);
-    if (!todayMap.has(key)) todayMap.set(key, row);
-  }
+  const todayMap = groupByHour(todayData);
+  const yesterdayMap = groupByHour(yesterdayData);
+  const weekAgoMap = groupByHour(weekAgoData);
 
-  const yesterdayMap = new Map<string, (typeof yesterdayData)[0]>();
-  for (const row of yesterdayData) {
-    const key = getHourMinuteKey(row.dateHour);
-    if (!yesterdayMap.has(key)) yesterdayMap.set(key, row);
-  }
-
-  const weekAgoMap = new Map<string, (typeof weekAgoData)[0]>();
-  for (const row of weekAgoData) {
-    const key = getHourMinuteKey(row.dateHour);
-    if (!weekAgoMap.has(key)) weekAgoMap.set(key, row);
-  }
-
-  const getSnapshotIntervalKey = (date: Date) => {
-    const h = date.getUTCHours();
-    const m = date.getUTCMinutes();
-    const roundedM = m < 30 ? '00' : '30';
-    return `${h.toString().padStart(2, '0')}${roundedM}`;
-  };
-
-  const realtimeMap = new Map<string, { activeUsers: number; keyEvents: number }>();
+  // An hour spans many realtime snapshots. Used only as a stand-in while GA4
+  // still lags on the current hour, so take the busiest snapshot rather than
+  // whichever one happened to land last.
+  const realtimeMap = new Map<number, { activeUsers: number; keyEvents: number }>();
   for (const snap of realtimeSnapshots) {
-    const key = getSnapshotIntervalKey(snap.capturedAt);
-    realtimeMap.set(key, {
-      activeUsers: snap.activeUsers,
-      keyEvents: snap.keyEvents,
+    const hour = snap.capturedAt.getUTCHours();
+    const prev = realtimeMap.get(hour);
+    realtimeMap.set(hour, {
+      activeUsers: Math.max(prev?.activeUsers ?? 0, snap.activeUsers),
+      keyEvents: Math.max(prev?.keyEvents ?? 0, snap.keyEvents),
     });
   }
 
   const warsawNow = getWarsawNow();
   const currentHour = warsawNow.getUTCHours();
-  const currentMinute = warsawNow.getUTCMinutes();
   const isToday = dateStr === getWarsawDateString();
 
   const points = [];
-  for (let i = 0; i < 48; i++) {
-    const h = Math.floor(i / 2);
-    const m = (i % 2) * 30;
-    const hourStr = h.toString().padStart(2, '0');
-    const minuteStr = m.toString().padStart(2, '0');
-    const key = `${hourStr}${minuteStr}`;
-    const label = `${hourStr}:${minuteStr}`;
+  for (let h = 0; h < 24; h++) {
+    const label = `${h.toString().padStart(2, '0')}:00`;
 
-    const todayReport = todayMap.get(key);
-    const yesterday = yesterdayMap.get(key);
-    const weekAgo = weekAgoMap.get(key);
+    const todayReport = todayMap.get(h);
+    const yesterday = yesterdayMap.get(h);
+    const weekAgo = weekAgoMap.get(h);
 
-    const isFuture = isToday && (h > currentHour || (h === currentHour && m > currentMinute));
-    const isRecent = isToday && (currentHour * 60 + currentMinute - (h * 60 + m) <= 180);
+    const isFuture = isToday && h > currentHour;
+    const isRecent = isToday && currentHour - h <= 3;
 
     let sessions: number | null = null;
     let users: number | null = null;
@@ -194,7 +190,7 @@ export async function GET(request: NextRequest) {
         users = todayReport.users;
         conversions = todayReport.conversions;
       } else if (isRecent) {
-        const rt = realtimeMap.get(key);
+        const rt = realtimeMap.get(h);
         if (rt) {
           sessions = rt.activeUsers;
           users = rt.activeUsers;
@@ -213,21 +209,16 @@ export async function GET(request: NextRequest) {
 
     const crmCallsCount = crmCalls.filter(c => {
       const callTime = new Date(c.timestamp.getTime() + offsetMs);
-      const ch = callTime.getUTCHours();
-      const cm = callTime.getUTCMinutes();
-      return ch === h && cm >= m && cm < m + 30;
+      return callTime.getUTCHours() === h;
     }).length;
 
     const crmLeadsCount = crmLeads.filter(l => {
       const leadTime = new Date(l.thuliumCreatedAt.getTime() + offsetMs);
-      const lh = leadTime.getUTCHours();
-      const lm = leadTime.getUTCMinutes();
-      return lh === h && lm >= m && lm < m + 30;
+      return leadTime.getUTCHours() === h;
     }).length;
 
     points.push({
       hour: h,
-      minute: m,
       label,
       sessions,
       users,
@@ -259,21 +250,36 @@ export async function GET(request: NextRequest) {
   const heatmapSum = Array.from({ length: 7 }, () => Array(24).fill(0));
   const heatmapCount = Array.from({ length: 7 }, () => Array(24).fill(0));
 
+  // Collapse to one value per (calendar day, hour) before averaging. Legacy
+  // rows are half-hourly, so an hour can be spread over two of them — counting
+  // those as two observations would halve every legacy hour in the average.
+  const perDayHour = new Map<string, number>();
   for (const row of deduplicated.values()) {
     const dh = row.dateHour; // "YYYYMMDDHH" or "YYYYMMDDHHMM"
     if (dh.length !== 10 && dh.length !== 12) continue;
-    const year = parseInt(dh.slice(0, 4));
-    const month = parseInt(dh.slice(4, 6)) - 1;
-    const day = parseInt(dh.slice(6, 8));
     const hour = parseInt(dh.slice(8, 10));
+    if (isNaN(hour)) continue;
+    const key = `${dh.slice(0, 8)}-${hour}`;
+    perDayHour.set(key, (perDayHour.get(key) ?? 0) + row.sessions);
+  }
 
-    const dateObj = new Date(Date.UTC(year, month, day));
+  for (const [key, sessions] of perDayHour) {
+    const dayKey = key.slice(0, 8);
+    const hour = parseInt(key.slice(9));
+
+    const dateObj = new Date(
+      Date.UTC(
+        parseInt(dayKey.slice(0, 4)),
+        parseInt(dayKey.slice(4, 6)) - 1,
+        parseInt(dayKey.slice(6, 8))
+      )
+    );
     if (isNaN(dateObj.getTime())) continue;
 
     const jsDay = dateObj.getUTCDay(); // 0 = Sunday, 1 = Monday...
     const dayIndex = jsDay === 0 ? 6 : jsDay - 1; // 0 = Monday, ..., 6 = Sunday
 
-    heatmapSum[dayIndex][hour] += row.sessions;
+    heatmapSum[dayIndex][hour] += sessions;
     heatmapCount[dayIndex][hour] += 1;
   }
 
