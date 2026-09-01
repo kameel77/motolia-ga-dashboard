@@ -17,9 +17,10 @@ import './trends.css';
 interface HourlyPoint {
   hour: number;
   sessions: number;
+  users: number;
   conversions: number;
-  sessionsYesterday?: number;
-  sessionsWeekAgo?: number;
+  usersYesterday?: number;
+  usersWeekAgo?: number;
 }
 
 interface TVSpot {
@@ -178,13 +179,13 @@ export default function TrendsPage() {
       (hourly?.points ?? []).map((p: any) => ({
         hour: p.hour,
         name: p.label,
-        Sesje: p.sessions,
+        'Użytkownicy': p.users,
         Konwersje: p.conversions,
-        ...(showYesterday && p.sessionsYesterday !== undefined
-          ? { 'Wczoraj': p.sessionsYesterday }
+        ...(showYesterday && p.usersYesterday !== undefined
+          ? { 'Wczoraj': p.usersYesterday }
           : {}),
-        ...(showWeekAgo && p.sessionsWeekAgo !== undefined
-          ? { 'Tydzień temu': p.sessionsWeekAgo }
+        ...(showWeekAgo && p.usersWeekAgo !== undefined
+          ? { 'Tydzień temu': p.usersWeekAgo }
           : {}),
         ...(showCalls ? { 'Telefony CRM': p.crmCalls ?? 0 } : {}),
         ...(showLeads ? { 'Formularze CRM': p.crmLeads ?? 0 } : {}),
@@ -292,7 +293,7 @@ export default function TrendsPage() {
             className="trends-legend-line"
             style={{ background: '#3b82f6' }}
           />
-          Sesje
+          Użytkownicy
         </div>
         <div className="trends-legend-item">
           <div
@@ -362,7 +363,7 @@ export default function TrendsPage() {
               margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
             >
               <defs>
-                <linearGradient id="gradSessions" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="gradUsers" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.15} />
                   <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                 </linearGradient>
@@ -421,11 +422,11 @@ export default function TrendsPage() {
 
               <Area
                 type="monotone"
-                dataKey="Sesje"
+                dataKey="Użytkownicy"
                 yAxisId="left"
                 stroke="#3b82f6"
                 strokeWidth={2}
-                fill="url(#gradSessions)"
+                fill="url(#gradUsers)"
                 dot={false}
                 activeDot={{ r: 4, fill: '#3b82f6', stroke: 'var(--bg-card)', strokeWidth: 2 }}
               />

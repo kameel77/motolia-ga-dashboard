@@ -185,23 +185,28 @@ export async function GET(request: NextRequest) {
     const isRecent = isToday && (currentHour * 60 + currentMinute - (h * 60 + m) <= 180);
 
     let sessions: number | null = null;
+    let users: number | null = null;
     let conversions: number | null = null;
 
     if (!isFuture) {
       if (todayReport && todayReport.sessions > 0) {
         sessions = todayReport.sessions;
+        users = todayReport.users;
         conversions = todayReport.conversions;
       } else if (isRecent) {
         const rt = realtimeMap.get(key);
         if (rt) {
           sessions = rt.activeUsers;
+          users = rt.activeUsers;
           conversions = rt.keyEvents;
         } else {
           sessions = 0;
+          users = 0;
           conversions = 0;
         }
       } else {
         sessions = 0;
+        users = 0;
         conversions = 0;
       }
     }
@@ -225,9 +230,12 @@ export async function GET(request: NextRequest) {
       minute: m,
       label,
       sessions,
+      users,
       conversions,
       sessionsYesterday: yesterday?.sessions ?? 0,
       sessionsWeekAgo: weekAgo?.sessions ?? 0,
+      usersYesterday: yesterday?.users ?? 0,
+      usersWeekAgo: weekAgo?.users ?? 0,
       crmCalls: crmCallsCount,
       crmLeads: crmLeadsCount,
     });
