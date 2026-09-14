@@ -409,11 +409,23 @@ function mapThuliumStatus(statusName: string | null): "NEW" | "IN_PROGRESS" | "O
   return "NEW";
 }
 
-function mapThuliumSource(sourceStr: string | null): "PHONE" | "EMAIL" | "WEB_FORM" {
-  if (!sourceStr) return "WEB_FORM";
-  const s = sourceStr.toLowerCase();
-  if (s.includes("phone") || s.includes("telefon") || s.includes("call")) return "PHONE";
-  if (s.includes("email") || s.includes("mail")) return "EMAIL";
+function mapThuliumSource(ticket: any): "PHONE" | "EMAIL" | "WEB_FORM" {
+  const queue = (ticket.ticket_queue_name || "").toLowerCase();
+  const subject = (ticket.subject || "").toLowerCase();
+  const sourceStr = (ticket.source || "").toLowerCase();
+
+  // Missed calls or phone queues are PHONE
+  if (queue.includes("nieodebrane") || subject.includes("nieodebrane")) {
+    return "PHONE";
+  }
+
+  // Website form inquiries that arrive via email or web queues
+  if (queue.includes("oferta_www") || queue.includes("formularz") || subject.includes("[motolia]")) {
+    return "WEB_FORM";
+  }
+
+  if (sourceStr.includes("phone") || sourceStr.includes("telefon") || sourceStr.includes("call")) return "PHONE";
+  if (sourceStr.includes("email") || sourceStr.includes("mail")) return "EMAIL";
   return "WEB_FORM";
 }
 
@@ -501,6 +513,10 @@ async function collectThulium(): Promise<void> {
       const timestamp = parseWarsawDate(call.date);
       if (isNaN(timestamp.getTime())) continue;
 
+      const existingCall = await prisma.crmCall.findUnique({
+        where: { id: String(call.connection_id) }
+      });
+
       await prisma.crmCall.upsert({
         where: { id: String(call.connection_id) },
         create: {
@@ -523,8 +539,8 @@ async function collectThulium(): Promise<void> {
         }
       });
 
-      // Record answered call conversion
-      if (call.disposition === "ANSWERED") {
+      // Record answered inbound call conversion only for newly discovered calls
+      if (!existingCall && call.disposition === "ANSWERED" && (call.type === "INBOUND" || !call.type)) {
         const capturedAt = new Date(timestamp);
         capturedAt.setUTCSeconds(0, 0);
         capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
@@ -578,7 +594,7 @@ async function collectThulium(): Promise<void> {
       };
 
       const details = extractThuliumDetails(ticket);
-      const sourceVal = mapThuliumSource(ticket.source);
+      const sourceVal = mapThuliumSource(ticket);
       const statusVal = mapThuliumStatus(ticket.full_status_name);
 
       const existingLead = await prisma.crmLead.findUnique({
@@ -618,41 +634,50 @@ async function collectThulium(): Promise<void> {
       });
 
       if (!existingLead) {
-        const capturedAt = new Date(thuliumCreatedAt);
-        capturedAt.setUTCSeconds(0, 0);
-        capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
+        const isMissedCall =
+          sourceVal === "PHONE" ||
+          (ticket.ticket_queue_name || "").toLowerCase().includes("nieodebrane") ||
+          (ticket.subject || "").toLowerCase().includes("nieodebrane");
+        const isSpam =
+          statusVal === "LOST" &&
+          (ticket.full_status_name || "").toLowerCase().includes("spam");
 
-        const dateHour = `${capturedAt.getUTCFullYear()}${String(capturedAt.getUTCMonth() + 1).padStart(2, "0")}${String(capturedAt.getUTCDate()).padStart(2, "0")}${String(capturedAt.getUTCHours()).padStart(2, "0")}${capturedAt.getUTCMinutes() < 30 ? "00" : "30"}`;
-        // CRM events use distinct names so they are never double-counted
-        // with GA4 events (form_submission / phone_call_click)
-        const eventName = sourceVal === "PHONE" ? "crm_lead_phone" : "crm_lead_form";
+        // Only record conversions for genuine web/form leads (not missed calls and not spam)
+        if (!isMissedCall && !isSpam) {
+          const capturedAt = new Date(thuliumCreatedAt);
+          capturedAt.setUTCSeconds(0, 0);
+          capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
 
-        const trafficRow = await prisma.trafficByHour.findFirst({ where: { dateHour } });
-        if (trafficRow) {
-          await prisma.trafficByHour.update({
-            where: { id: trafficRow.id },
-            data: { conversions: { increment: 1 } }
-          });
-        }
+          const dateHour = `${capturedAt.getUTCFullYear()}${String(capturedAt.getUTCMonth() + 1).padStart(2, "0")}${String(capturedAt.getUTCDate()).padStart(2, "0")}${String(capturedAt.getUTCHours()).padStart(2, "0")}${capturedAt.getUTCMinutes() < 30 ? "00" : "30"}`;
+          const eventName = "crm_lead_form";
 
-        const existingConv = await prisma.conversionEvent.findFirst({
-          where: {
-            capturedAt,
-            eventName,
-            source: details.utmSource || "crm_connector"
+          const trafficRow = await prisma.trafficByHour.findFirst({ where: { dateHour } });
+          if (trafficRow) {
+            await prisma.trafficByHour.update({
+              where: { id: trafficRow.id },
+              data: { conversions: { increment: 1 } }
+            });
           }
-        });
 
-        if (!existingConv) {
-          await prisma.conversionEvent.create({
-            data: {
+          const existingConv = await prisma.conversionEvent.findFirst({
+            where: {
               capturedAt,
               eventName,
-              source: details.utmSource || "crm_connector",
-              medium: details.utmMedium || (sourceVal === "PHONE" ? "phone" : "web"),
-              count: 1
+              source: details.utmSource || "crm_connector"
             }
           });
+
+          if (!existingConv) {
+            await prisma.conversionEvent.create({
+              data: {
+                capturedAt,
+                eventName,
+                source: details.utmSource || "crm_connector",
+                medium: details.utmMedium || "web",
+                count: 1
+              }
+            });
+          }
         }
       }
       ticketsImported++;

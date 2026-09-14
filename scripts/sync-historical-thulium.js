@@ -15,7 +15,7 @@ function parseWarsawDate(dateStr) {
   if (isoStr.includes("Z") || isoStr.includes("+") || (isoStr.includes("-") && isoStr.split("-").length > 3)) {
     return new Date(dateStr);
   }
-  
+
   const dateObj = new Date(isoStr + "Z");
   try {
     const tzString = dateObj.toLocaleString("en-US", { timeZone: "Europe/Warsaw" });
@@ -33,7 +33,7 @@ function request(path) {
   return new Promise((resolve, reject) => {
     const auth = Buffer.from(`${USERNAME}:${API_KEY}`).toString('base64');
     const url = `https://${INSTANCE}.thulium.com/api${path}`;
-    
+
     https.get(url, {
       headers: {
         'Authorization': `Basic ${auth}`,
@@ -61,62 +61,70 @@ function request(path) {
 function mapStatus(statusName) {
   if (!statusName) return 'NEW';
   const s = statusName.toLowerCase();
-  
+
   if (
-    s.includes("odrzucon") || 
-    s.includes("przegran") || 
-    s.includes("lost") || 
-    s.includes("spam") || 
-    s.includes("anulowan") ||
-    s.includes("rezygnac") ||
-    s.includes("bez powodzenia")
-  ) {
-    return "LOST";
-  }
-  
-  if (
-    s.includes("wygran") || 
-    s.includes("sukces") || 
-    s.includes("sprzedan") || 
+    s.includes("wygran") ||
+    s.includes("sukces") ||
+    s.includes("sprzedan") ||
     s.includes("zaakceptowane") ||
-    s.includes("won") ||
-    (s.includes("zamkni") || s.includes("zamknięty"))
+    s.includes("won")
   ) {
     return "WON";
   }
-  
+
   if (
-    s.includes("oferta") || 
-    s.includes("offer") || 
+    s.includes("odrzucon") ||
+    s.includes("przegran") ||
+    s.includes("lost") ||
+    s.includes("spam") ||
+    s.includes("anulowan") ||
+    s.includes("rezygnac") ||
+    s.includes("bez powodzenia") ||
+    s.includes("zamkni")
+  ) {
+    return "LOST";
+  }
+
+  if (
+    s.includes("oferta") ||
+    s.includes("offer") ||
     s.includes("wycen")
   ) {
     return "OFFER";
   }
-  
+
   if (
-    s.includes("otwarty") || 
-    s.includes("kontakt") || 
-    s.includes("proces") || 
+    s.includes("otwarty") ||
+    s.includes("kontakt") ||
+    s.includes("proces") ||
     s.includes("bieżąc") ||
     s.includes("toku") ||
     s.includes("podjęt")
   ) {
     return "IN_PROGRESS";
   }
-  
+
   if (s.includes("nowy") || s.includes("nowe")) {
     return "NEW";
   }
-  
+
   return "NEW";
 }
 
 // Map Thulium source to CrmLeadSource
-function mapSource(sourceStr) {
-  if (!sourceStr) return 'WEB_FORM';
-  const s = sourceStr.toLowerCase();
-  if (s.includes('phone') || s.includes('telefon') || s.includes('call')) return 'PHONE';
-  if (s.includes('email') || s.includes('mail')) return 'EMAIL';
+function mapSource(ticket) {
+  const queue = (ticket.ticket_queue_name || '').toLowerCase();
+  const subject = (ticket.subject || '').toLowerCase();
+  const sourceStr = (ticket.source || '').toLowerCase();
+
+  if (queue.includes('nieodebrane') || subject.includes('nieodebrane')) {
+    return 'PHONE';
+  }
+  if (queue.includes('oferta_www') || queue.includes('formularz') || subject.includes('[motolia]')) {
+    return 'WEB_FORM';
+  }
+  if (sourceStr.includes('phone') || sourceStr.includes('telefon') || sourceStr.includes('call')) return 'PHONE';
+  if (sourceStr.includes('email') || sourceStr.includes('mail')) return 'EMAIL';
   return 'WEB_FORM';
 }
 
@@ -133,7 +141,7 @@ function extractDetails(ticket) {
   const priceMatch = text.match(/(?:Cena|Cena \(PLN\)|Wartość|Kwota)\s*:\s*([\d\s]+)/i);
   const urlMatch = text.match(/(?:Link do ogłoszenia|URL|Adres)\s*:\s*(https?:\/\/[^\s]+)/i);
   const referrerMatch = text.match(/(?:Referrer|Źródło)\s*:\s*([^\s\n\r]+)/i);
-  
+
   // UTMs
   const utmSourceMatch = text.match(/utm_source\s*:\s*([^\s\n\r]+)/i);
   const utmMediumMatch = text.match(/utm_medium\s*:\s*([^\s\n\r]+)/i);
@@ -164,7 +172,7 @@ async function main() {
     const rawCustomers = await request('/customers?limit=2000');
     const customersList = Array.isArray(rawCustomers) ? rawCustomers : (rawCustomers.result || rawCustomers.data || []);
     const customerMap = new Map();
-    
+
     customersList.forEach(c => {
       customerMap.set(String(c.customer_id), {
         name: `${c.name || ''} ${c.surname || ''}`.trim() || 'Klient Anonimowy',
@@ -185,7 +193,7 @@ async function main() {
       console.log(`Fetching connections offset ${callOffset}...`);
       const res = await request(`/connections?limit=${callLimit}&offset=${callOffset}`);
       const calls = res.result || [];
-      
+
       if (calls.length === 0) {
         finishedCalls = true;
         break;
@@ -218,8 +226,8 @@ async function main() {
           }
         });
 
-        // Record answered call conversion
-        if (call.disposition === 'ANSWERED') {
+        // Record answered inbound call conversion
+        if (call.disposition === 'ANSWERED' && (call.type === 'INBOUND' || !call.type)) {
           const capturedAt = new Date(timestamp);
           capturedAt.setUTCSeconds(0, 0);
           capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
@@ -292,7 +300,7 @@ async function main() {
         };
 
         const details = extractDetails(ticket);
-        const sourceVal = mapSource(ticket.source);
+        const sourceVal = mapSource(ticket);
         const statusVal = mapStatus(ticket.full_status_name);
 
         // Check if lead already exists in DB
@@ -333,14 +341,22 @@ async function main() {
           }
         });
 
-        // Record conversion for new lead
-        if (!existingLead) {
+        // Record conversion for new lead (excluding missed calls and spam)
+        const isMissedCall =
+          sourceVal === 'PHONE' ||
+          (ticket.ticket_queue_name || '').toLowerCase().includes('nieodebrane') ||
+          (ticket.subject || '').toLowerCase().includes('nieodebrane');
+        const isSpam =
+          statusVal === 'LOST' &&
+          (ticket.full_status_name || '').toLowerCase().includes('spam');
+
+        if (!existingLead && !isMissedCall && !isSpam) {
           const capturedAt = new Date(thuliumCreatedAt);
           capturedAt.setUTCSeconds(0, 0);
           capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
 
           const dateHour = `${capturedAt.getUTCFullYear()}${String(capturedAt.getUTCMonth() + 1).padStart(2, '0')}${String(capturedAt.getUTCDate()).padStart(2, '0')}${String(capturedAt.getUTCHours()).padStart(2, '0')}${capturedAt.getUTCMinutes() < 30 ? '00' : '30'}`;
-          const eventName = sourceVal === 'PHONE' ? 'phone_call' : 'form_submission';
+          const eventName = 'form_submission';
 
           // Increment TrafficByHour
           const trafficRow = await prisma.trafficByHour.findFirst({ where: { dateHour } });
@@ -366,7 +382,7 @@ async function main() {
                 capturedAt,
                 eventName,
                 source: details.utmSource || 'crm_connector',
-                medium: details.utmMedium || (sourceVal === 'PHONE' ? 'phone' : 'web'),
+                medium: details.utmMedium || 'web',
                 count: 1
               }
             });

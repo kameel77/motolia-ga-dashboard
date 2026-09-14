@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
           lt: todayEnd,
         },
         disposition: 'ANSWERED',
+        direction: 'INBOUND',
       },
     }),
     prisma.crmLead.findMany({
@@ -120,6 +121,14 @@ export async function GET(request: NextRequest) {
           gte: todayStart,
           lt: todayEnd,
         },
+        source: {
+          not: 'PHONE',
+        },
+        NOT: [
+          { queueName: { contains: 'Nieodebrane', mode: 'insensitive' } },
+          { subject: { contains: 'Nieodebrane', mode: 'insensitive' } },
+          { thuliumStatus: { contains: 'SPAM', mode: 'insensitive' } },
+        ],
       },
     }),
   ]);

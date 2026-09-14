@@ -16,9 +16,12 @@ import './trends.css';
 
 interface HourlyPoint {
   hour: number;
+  label?: string;
   sessions: number;
   users: number;
   conversions: number;
+  crmCalls?: number;
+  crmLeads?: number;
   usersYesterday?: number;
   usersWeekAgo?: number;
 }
@@ -166,7 +169,7 @@ export default function TrendsPage() {
 
   const chartData = useMemo(
     () =>
-      (hourly?.points ?? []).map((p: any) => ({
+      (hourly?.points ?? []).map((p: HourlyPoint) => ({
         hour: p.hour,
         name: p.label,
         'Użytkownicy': p.users,
@@ -285,24 +288,24 @@ export default function TrendsPage() {
           />
           Użytkownicy
         </div>
-        <div className="trends-legend-item">
+        <div className="trends-legend-item" title="Kluczowe zdarzenia z Google Analytics 4 (GA4 ma typowo opóźnienie do 24-48h w raportach godzinowych)">
           <div
             className="trends-legend-line"
             style={{ background: '#10b981' }}
           />
-          Konwersje
+          Konwersje (GA4)
         </div>
         {showCalls && (
-          <div className="trends-legend-item">
+          <div className="trends-legend-item" title="Odebrane połączenia przychodzące z infolinii Thulium">
             <div
               className="trends-legend-line"
               style={{ background: '#06b6d4' }}
             />
-            Telefony CRM
+            Telefony CRM (przychodzące)
           </div>
         )}
         {showLeads && (
-          <div className="trends-legend-item">
+          <div className="trends-legend-item" title="Otrzymane formularze i zapytania ofertowe (bez nieodebranych telefonów i spamu)">
             <div
               className="trends-legend-line"
               style={{ background: '#8b5cf6' }}

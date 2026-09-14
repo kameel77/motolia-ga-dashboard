@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { CrmLeadStatus } from '@prisma/client';
+import { CrmLeadStatus, CrmLeadSource } from '@prisma/client';
 
 function parseWarsawDate(dateStr: string | null | undefined): Date {
   if (!dateStr) return new Date();
@@ -8,7 +8,7 @@ function parseWarsawDate(dateStr: string | null | undefined): Date {
   if (isoStr.includes("Z") || isoStr.includes("+") || (isoStr.includes("-") && isoStr.split("-").length > 3)) {
     return new Date(dateStr);
   }
-  
+
   const dateObj = new Date(isoStr + "Z");
   try {
     const tzString = dateObj.toLocaleString("en-US", { timeZone: "Europe/Warsaw" });
@@ -25,54 +25,74 @@ function parseWarsawDate(dateStr: string | null | undefined): Date {
 function mapThuliumStatus(statusName: string | null): CrmLeadStatus {
   if (!statusName) return CrmLeadStatus.NEW;
   const s = statusName.toLowerCase();
-  
+
   if (
-    s.includes("odrzucon") || 
-    s.includes("przegran") || 
-    s.includes("lost") || 
-    s.includes("spam") || 
-    s.includes("anulowan") ||
-    s.includes("rezygnac") ||
-    s.includes("bez powodzenia")
-  ) {
-    return CrmLeadStatus.LOST;
-  }
-  
-  if (
-    s.includes("wygran") || 
-    s.includes("sukces") || 
-    s.includes("sprzedan") || 
+    s.includes("wygran") ||
+    s.includes("sukces") ||
+    s.includes("sprzedan") ||
     s.includes("zaakceptowane") ||
-    s.includes("won") ||
-    (s.includes("zamkni") || s.includes("zamknięty"))
+    s.includes("won")
   ) {
     return CrmLeadStatus.WON;
   }
-  
+
   if (
-    s.includes("oferta") || 
-    s.includes("offer") || 
+    s.includes("odrzucon") ||
+    s.includes("przegran") ||
+    s.includes("lost") ||
+    s.includes("spam") ||
+    s.includes("anulowan") ||
+    s.includes("rezygnac") ||
+    s.includes("bez powodzenia") ||
+    s.includes("zamkni")
+  ) {
+    return CrmLeadStatus.LOST;
+  }
+
+  if (
+    s.includes("oferta") ||
+    s.includes("offer") ||
     s.includes("wycen")
   ) {
     return CrmLeadStatus.OFFER;
   }
-  
+
   if (
-    s.includes("otwarty") || 
-    s.includes("kontakt") || 
-    s.includes("proces") || 
+    s.includes("otwarty") ||
+    s.includes("kontakt") ||
+    s.includes("proces") ||
     s.includes("bieżąc") ||
     s.includes("toku") ||
     s.includes("podjęt")
   ) {
     return CrmLeadStatus.IN_PROGRESS;
   }
-  
+
   if (s.includes("nowy") || s.includes("nowe")) {
     return CrmLeadStatus.NEW;
   }
-  
+
   return CrmLeadStatus.NEW;
+}
+
+function mapThuliumSource(lead: any): CrmLeadSource {
+  const queue = (lead.queueName || "").toLowerCase();
+  const subject = (lead.subject || "").toLowerCase();
+  const sourceStr = (lead.source || "").toLowerCase();
+
+  if (queue.includes("nieodebrane") || subject.includes("nieodebrane")) {
+    return CrmLeadSource.PHONE;
+  }
+  if (queue.includes("oferta_www") || queue.includes("formularz") || subject.includes("[motolia]")) {
+    return CrmLeadSource.WEB_FORM;
+  }
+  if (sourceStr.includes("phone") || sourceStr.includes("telefon") || sourceStr.includes("call")) {
+    return CrmLeadSource.PHONE;
+  }
+  if (sourceStr.includes("email") || sourceStr.includes("mail")) {
+    return CrmLeadSource.EMAIL;
+  }
+  return CrmLeadSource.WEB_FORM;
 }
 
 export async function POST(request: NextRequest) {
@@ -104,6 +124,7 @@ export async function POST(request: NextRequest) {
       const thuliumCreatedAt = parseWarsawDate(lead.thuliumCreatedAt);
       const thuliumUpdatedAt = parseWarsawDate(lead.thuliumUpdatedAt);
       const mappedStatus = mapThuliumStatus(lead.thuliumStatus || lead.status || 'Nowy');
+      const mappedSource = mapThuliumSource(lead);
 
       // Check if lead already exists
       const existingLead = await prisma.crmLead.findUnique({
@@ -118,7 +139,7 @@ export async function POST(request: NextRequest) {
           clientName: lead.clientName || 'Klient Anonimowy',
           clientEmail: lead.clientEmail || null,
           clientPhone: lead.clientPhone || null,
-          source: lead.source, // PHONE | EMAIL | WEB_FORM
+          source: mappedSource, // PHONE | EMAIL | WEB_FORM
           status: mappedStatus,
           thuliumStatus: lead.thuliumStatus || 'Nowy',
           queueName: lead.queueName || null,
@@ -137,7 +158,7 @@ export async function POST(request: NextRequest) {
           clientName: lead.clientName || 'Klient Anonimowy',
           clientEmail: lead.clientEmail || null,
           clientPhone: lead.clientPhone || null,
-          source: lead.source,
+          source: mappedSource,
           status: mappedStatus,
           thuliumStatus: lead.thuliumStatus || 'Nowy',
           queueName: lead.queueName || null,
@@ -154,14 +175,20 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      // Track conversion only on initial creation
-      if (!existingLead) {
+      // Track conversion only on initial creation for genuine web/form leads (not missed calls and not spam)
+      const isMissedCall =
+        lead.source === 'PHONE' ||
+        (lead.queueName || '').toLowerCase().includes('nieodebrane') ||
+        (lead.subject || '').toLowerCase().includes('nieodebrane');
+      const isSpam = mappedStatus === CrmLeadStatus.LOST && (lead.thuliumStatus || '').toLowerCase().includes('spam');
+
+      if (!existingLead && !isMissedCall && !isSpam) {
         const capturedAt = new Date(thuliumCreatedAt);
         capturedAt.setUTCSeconds(0, 0);
         capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
 
         const dateHour = `${capturedAt.getUTCFullYear()}${String(capturedAt.getUTCMonth() + 1).padStart(2, '0')}${String(capturedAt.getUTCDate()).padStart(2, '0')}${String(capturedAt.getUTCHours()).padStart(2, '0')}${capturedAt.getUTCMinutes() < 30 ? '00' : '30'}`;
-        const eventName = lead.source === 'PHONE' ? 'crm_lead_phone' : 'crm_lead_form';
+        const eventName = 'crm_lead_form';
 
         // 1. Increment TrafficByHour conversions
         const trafficRow = await prisma.trafficByHour.findFirst({
@@ -228,8 +255,8 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        // Record conversion for answered calls
-        if (call.disposition === 'ANSWERED') {
+        // Record conversion for answered inbound calls
+        if (call.disposition === 'ANSWERED' && (!call.direction || call.direction === 'INBOUND')) {
           const capturedAt = new Date(timestamp);
           capturedAt.setUTCSeconds(0, 0);
           capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
