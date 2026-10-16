@@ -3,13 +3,10 @@ import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
 import { getPeriodRange, type Period } from '@/lib/utils';
+import { GA4_FORM_EVENTS, GA4_PHONE_EVENTS } from '@/lib/ga4-client';
+import { getTodayIntradaySupplement } from '@/lib/intraday';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-// GA4-sourced event names only. CRM events (crm_lead_form, crm_lead_phone)
-// describe the same leads and must not be added on top of GA4 counts.
-const GA4_FORM_EVENTS = ['form_submission', 'generate_lead'];
-const GA4_PHONE_EVENTS = ['phone_call_click'];
 
 interface Totals {
   sessions: number;
@@ -102,16 +99,15 @@ export async function GET(request: NextRequest) {
   const previous = getPeriodRange(period, 1);
 
   // KPI totals come from GA4 reports run over the whole window, cached by the
-  // worker in PeriodSummary. They are deliberately NOT summed from
-  // TrafficBySource: GA4's source breakdown adds overlapping "(not set)" and
-  // "(data not available)" rows and counts a user once per source, which
-  // inflated these cards by 57-71%.
-  const [totals, prevTotals] = await Promise.all([
+  // worker in PeriodSummary, supplemented by RealtimeSnapshot for any hours of
+  // today that GA4's Data API (`runReport`) has not yet finalized.
+  const [totals, prevTotals, supplement] = await Promise.all([
     getTotals(period, 0, current.startDate, current.endDate),
     getTotals(period, 1, previous.startDate, previous.endDate),
+    getTodayIntradaySupplement(),
   ]);
 
-  const [formSubmissions, phoneCalls, prevFormSubmissions, prevPhoneCalls, trend] =
+  const [rawFormSubmissions, rawPhoneCalls, prevFormSubmissions, prevPhoneCalls, rawTrend] =
     await Promise.all([
       countConversionEvents(current.startDate, current.endDate, GA4_FORM_EVENTS),
       countConversionEvents(current.startDate, current.endDate, GA4_PHONE_EVENTS),
@@ -122,6 +118,46 @@ export async function GET(request: NextRequest) {
         orderBy: { date: 'asc' },
       }),
     ]);
+
+  if (supplement.sessions > 0 || supplement.conversions > 0) {
+    const prevSessions = totals.sessions;
+    totals.sessions += supplement.sessions;
+    totals.users += supplement.users;
+    totals.newUsers += supplement.newUsers;
+    totals.conversions += supplement.conversions;
+    if (prevSessions === 0 && supplement.sessions > 0) {
+      totals.bounceRate = supplement.bounceRate;
+    }
+  }
+
+  const formSubmissions = rawFormSubmissions + supplement.formSubmissions;
+  const phoneCalls = rawPhoneCalls + supplement.phoneClicks;
+
+  const trend = rawTrend.map((t) => ({ ...t }));
+  const todayIdx = trend.findIndex(
+    (t) => t.date.toISOString().split('T')[0] === supplement.todayDateStr
+  );
+  if (todayIdx >= 0) {
+    trend[todayIdx].sessions += supplement.sessions;
+    trend[todayIdx].users += supplement.users;
+    trend[todayIdx].newUsers += supplement.newUsers;
+    trend[todayIdx].conversions += supplement.conversions;
+    if (trend[todayIdx].bounceRate === 0 && supplement.bounceRate > 0) {
+      trend[todayIdx].bounceRate = supplement.bounceRate;
+    }
+  } else if (supplement.sessions > 0 || supplement.conversions > 0) {
+    trend.push({
+      id: 0,
+      date: supplement.todayDate,
+      sessions: supplement.sessions,
+      users: supplement.users,
+      newUsers: supplement.newUsers,
+      bounceRate: supplement.bounceRate,
+      conversions: supplement.conversions,
+      avgSessionDuration: 0,
+      createdAt: new Date(),
+    });
+  }
 
   const bounceRate = Math.round(totals.bounceRate * 10000) / 100;
   const prevBounceRate = Math.round(prevTotals.bounceRate * 10000) / 100;

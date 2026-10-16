@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
-import { getWarsawNow } from '@/lib/utils';
-
-type Period = 'today' | '7d' | '30d' | '90d';
+import { getWarsawNow, type Period } from '@/lib/utils';
+import { getTodayIntradaySupplement } from '@/lib/intraday';
 
 function getStartDate(period: Period): Date {
   const now = getWarsawNow();
@@ -26,7 +25,7 @@ function getStartDate(period: Period): Date {
 function getChannelGroup(source: string, medium: string): string {
   const src = source.toLowerCase();
   const med = medium.toLowerCase();
-  
+
   if (med.includes('cpc') || med.includes('ppc') || med.includes('paid')) return 'CPC';
   if (med.includes('organic')) return 'Organic';
   if (src.includes('direct') || med.includes('none') || med.includes('direct')) return 'Direct';
@@ -62,29 +61,35 @@ export async function GET(request: NextRequest) {
     whereClause.medium = medium;
   }
 
-  const trafficRows = await prisma.trafficBySource.findMany({
-    where: whereClause,
-    select: {
-      source: true,
-      medium: true,
-      sessions: true,
-      users: true,
-      conversions: true,
-      bounceRate: true,
-      engagementRate: true,
-    },
-  });
+  const [trafficRows, supplement] = await Promise.all([
+    prisma.trafficBySource.findMany({
+      where: whereClause,
+      select: {
+        source: true,
+        medium: true,
+        sessions: true,
+        users: true,
+        conversions: true,
+        bounceRate: true,
+        engagementRate: true,
+      },
+    }),
+    getTodayIntradaySupplement(),
+  ]);
 
   // Group in JS to compute session-weighted rates (plain _avg skews toward low-traffic days)
-  const groups = new Map<string, {
-    source: string;
-    medium: string;
-    sessions: number;
-    users: number;
-    conversions: number;
-    bounceWeighted: number;
-    engagementWeighted: number;
-  }>();
+  const groups = new Map<
+    string,
+    {
+      source: string;
+      medium: string;
+      sessions: number;
+      users: number;
+      conversions: number;
+      bounceWeighted: number;
+      engagementWeighted: number;
+    }
+  >();
 
   for (const r of trafficRows) {
     const key = `${r.source} / ${r.medium}`;
@@ -105,6 +110,25 @@ export async function GET(request: NextRequest) {
     groups.set(key, g);
   }
 
+  // If GA4's standard report has unfinalized hours today and no medium filter
+  // excludes it, include an explicit unattributed realtime bucket so today's
+  // total sessions/conversions remain visible while GA4 processes attribution.
+  if (!medium && (supplement.sessions > 0 || supplement.conversions > 0)) {
+    const rtSource = '(realtime — przed atrybucją GA4)';
+    const rtMedium = '(live)';
+    const key = `${rtSource} / ${rtMedium}`;
+    const engRate = Math.max(0, 1 - supplement.bounceRate);
+    groups.set(key, {
+      source: rtSource,
+      medium: rtMedium,
+      sessions: supplement.sessions,
+      users: supplement.users,
+      conversions: supplement.conversions,
+      bounceWeighted: supplement.sessions * supplement.bounceRate,
+      engagementWeighted: supplement.sessions * engRate,
+    });
+  }
+
   const rows = Array.from(groups.values())
     .map((g) => ({
       sourceMedium: `${g.source} / ${g.medium}`,
@@ -112,9 +136,11 @@ export async function GET(request: NextRequest) {
       sessions: g.sessions,
       users: g.users,
       bounceRate: g.sessions > 0 ? Math.round((g.bounceWeighted / g.sessions) * 10000) / 100 : 0,
-      engagementRate: g.sessions > 0 ? Math.round((g.engagementWeighted / g.sessions) * 10000) / 100 : 0,
+      engagementRate:
+        g.sessions > 0 ? Math.round((g.engagementWeighted / g.sessions) * 10000) / 100 : 0,
       conversions: g.conversions,
-      conversionRate: g.sessions > 0 ? Math.round((g.conversions / g.sessions) * 10000) / 100 : 0,
+      conversionRate:
+        g.sessions > 0 ? Math.round((g.conversions / g.sessions) * 10000) / 100 : 0,
     }))
     .sort((a, b) => b.sessions - a.sessions);
 

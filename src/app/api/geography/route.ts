@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
-import { getWarsawNow } from '@/lib/utils';
-
-type Period = 'today' | '7d' | '30d' | '90d';
+import { getWarsawNow, type Period } from '@/lib/utils';
+import { getTodayIntradaySupplement } from '@/lib/intraday';
 
 function getStartDate(period: Period): Date {
   const now = getWarsawNow();
@@ -40,33 +39,73 @@ export async function GET(request: NextRequest) {
   const startDate = getStartDate(period);
   const now = getWarsawNow();
 
-  const geoData = await prisma.trafficByGeo.groupBy({
-    by: ['country', 'region', 'city'],
-    where: { capturedAt: { gte: startDate, lte: now } },
-    _sum: {
-      sessions: true,
-      users: true,
-      conversions: true,
-    },
-    orderBy: {
-      _sum: { sessions: 'desc' },
-    },
-    take: 50,
-  });
+  const [geoData, supplement] = await Promise.all([
+    prisma.trafficByGeo.groupBy({
+      by: ['country', 'region', 'city'],
+      where: { capturedAt: { gte: startDate, lte: now } },
+      _sum: {
+        sessions: true,
+        users: true,
+        conversions: true,
+      },
+      orderBy: {
+        _sum: { sessions: 'desc' },
+      },
+      take: 100,
+    }),
+    getTodayIntradaySupplement(),
+  ]);
 
-  const locations = geoData.map((loc) => {
-    const sessions = loc._sum.sessions ?? 0;
-    const conversions = loc._sum.conversions ?? 0;
-    return {
+  const merged = new Map<
+    string,
+    { country: string; region: string; city: string; sessions: number; users: number; conversions: number }
+  >();
+
+  for (const loc of geoData) {
+    const key = `${loc.country}|${loc.city}`;
+    const existing = merged.get(key);
+    if (existing) {
+      existing.sessions += loc._sum.sessions ?? 0;
+      existing.users += loc._sum.users ?? 0;
+      existing.conversions += loc._sum.conversions ?? 0;
+      if (!existing.region && loc.region) existing.region = loc.region;
+    } else {
+      merged.set(key, {
+        country: loc.country,
+        region: loc.region,
+        city: loc.city,
+        sessions: loc._sum.sessions ?? 0,
+        users: loc._sum.users ?? 0,
+        conversions: loc._sum.conversions ?? 0,
+      });
+    }
+  }
+
+  for (const rtLoc of supplement.cities) {
+    const key = `${rtLoc.country}|${rtLoc.city}`;
+    const existing = merged.get(key);
+    if (existing) {
+      existing.sessions += rtLoc.sessions;
+      existing.users += rtLoc.users;
+      existing.conversions += rtLoc.conversions;
+    } else {
+      merged.set(key, { ...rtLoc });
+    }
+  }
+
+  const locations = Array.from(merged.values())
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, 50)
+    .map((loc) => ({
       country: loc.country,
       region: loc.region,
       city: loc.city,
-      sessions,
-      users: loc._sum.users ?? 0,
-      conversions,
-      conversionRate: sessions > 0 ? Math.round((conversions / sessions) * 10000) / 100 : 0,
-    };
-  });
+      sessions: loc.sessions,
+      users: loc.users,
+      conversions: loc.conversions,
+      conversionRate:
+        loc.sessions > 0 ? Math.round((loc.conversions / loc.sessions) * 10000) / 100 : 0,
+    }));
 
   const data = { rows: locations };
 

@@ -539,8 +539,12 @@ export async function fetchDailyTrafficByLandingPage(
   }
 }
 
+export const GA4_FORM_EVENTS = ["form_submission", "generate_lead", "email_click"];
+export const GA4_PHONE_EVENTS = ["phone_call_click", "phone_click"];
+export const GA4_CONVERSION_EVENTS = [...GA4_FORM_EVENTS, ...GA4_PHONE_EVENTS];
+
 /**
- * Conversion events (form_submission, phone_call_click) for a given date.
+ * Conversion events (form_submission, generate_lead, email_click, phone_call_click, phone_click) for a given date.
  */
 export async function fetchDailyConversions(
   date: string
@@ -564,7 +568,7 @@ export async function fetchDailyConversions(
         filter: {
           fieldName: "eventName",
           inListFilter: {
-            values: ["form_submission", "phone_call_click", "generate_lead"],
+            values: GA4_CONVERSION_EVENTS,
           },
         },
       },

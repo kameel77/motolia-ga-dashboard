@@ -17,6 +17,7 @@ model RealtimeSnapshot {
   topSources  Json?
   topPages    Json?
   topCities   Json?
+  topDevices  Json?
   createdAt   DateTime @default(now())
 
   @@index([capturedAt])

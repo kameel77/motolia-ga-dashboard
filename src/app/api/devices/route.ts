@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
-import { getWarsawNow } from '@/lib/utils';
-
-type Period = 'today' | '7d' | '30d' | '90d';
+import { getWarsawNow, type Period } from '@/lib/utils';
+import { getTodayIntradaySupplement } from '@/lib/intraday';
 
 function getStartDate(period: Period): Date {
   const now = getWarsawNow();
@@ -40,26 +39,59 @@ export async function GET(request: NextRequest) {
   const startDate = getStartDate(period);
   const now = getWarsawNow();
 
-  const deviceData = await prisma.trafficByDevice.groupBy({
-    by: ['deviceCategory'],
-    where: { capturedAt: { gte: startDate, lte: now } },
-    _sum: { sessions: true, users: true },
-    _avg: { bounceRate: true },
-  });
+  const [deviceData, supplement] = await Promise.all([
+    prisma.trafficByDevice.groupBy({
+      by: ['deviceCategory'],
+      where: { capturedAt: { gte: startDate, lte: now } },
+      _sum: { sessions: true, users: true },
+      _avg: { bounceRate: true },
+    }),
+    getTodayIntradaySupplement(),
+  ]);
 
-  const totalSessions = deviceData.reduce((sum, d) => sum + (d._sum.sessions ?? 0), 0);
+  const merged = new Map<
+    string,
+    { device: string; sessions: number; users: number; bounceWeighted: number }
+  >();
 
-  const rows = deviceData.map((d) => {
+  for (const d of deviceData) {
+    const key = d.deviceCategory.toLowerCase();
     const sessions = d._sum.sessions ?? 0;
-    return {
+    const bounce = d._avg.bounceRate ?? 0;
+    merged.set(key, {
       device: d.deviceCategory,
       sessions,
       users: d._sum.users ?? 0,
-      bounceRate: Math.round((d._avg.bounceRate ?? 0) * 10000) / 100,
-    };
-  });
+      bounceWeighted: sessions * bounce,
+    });
+  }
 
-  rows.sort((a, b) => b.sessions - a.sessions);
+  for (const rtDev of supplement.devices) {
+    const key = rtDev.deviceCategory.toLowerCase();
+    const existing = merged.get(key);
+    if (existing) {
+      existing.sessions += rtDev.sessions;
+      existing.users += rtDev.users;
+      existing.bounceWeighted += rtDev.sessions * rtDev.bounceRate;
+    } else {
+      merged.set(key, {
+        device: rtDev.deviceCategory,
+        sessions: rtDev.sessions,
+        users: rtDev.users,
+        bounceWeighted: rtDev.sessions * rtDev.bounceRate,
+      });
+    }
+  }
+
+  const rows = Array.from(merged.values())
+    .map((d) => ({
+      device: d.device,
+      sessions: d.sessions,
+      users: d.users,
+      bounceRate:
+        d.sessions > 0 ? Math.round((d.bounceWeighted / d.sessions) * 10000) / 100 : 0,
+    }))
+    .sort((a, b) => b.sessions - a.sessions);
 
   const data = { rows };
 

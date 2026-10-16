@@ -53,9 +53,10 @@ async function collectRealtime(): Promise<void> {
         eventCount: data.totalEventCount,
         keyEvents: data.totalKeyEvents,
         pageViews: data.totalScreenPageViews,
-        topSources: JSON.parse(JSON.stringify(data.events.slice(0, 10))),
-        topPages: JSON.parse(JSON.stringify(data.pages.slice(0, 10))),
-        topCities: JSON.parse(JSON.stringify(data.geo.slice(0, 10))),
+        topSources: JSON.parse(JSON.stringify(data.events.slice(0, 25))),
+        topPages: JSON.parse(JSON.stringify(data.pages.slice(0, 15))),
+        topCities: JSON.parse(JSON.stringify(data.geo.slice(0, 25))),
+        topDevices: JSON.parse(JSON.stringify(data.devices)),
       },
     });
 
@@ -67,41 +68,37 @@ async function collectRealtime(): Promise<void> {
   }
 }
 
-async function collectDailyTraffic(): Promise<void> {
-  const today = todayString();
-  const now = getWarsawNow();
-  console.log(`[Cron] ${ts()} Collecting daily traffic for ${today}...`);
+async function collectDailyTrafficForDate(
+  targetDate: string,
+  capturedAt: Date
+): Promise<void> {
+  console.log(`[Cron] ${ts()} Collecting daily traffic for ${targetDate}...`);
 
   try {
     const [bySource, byHour, byGeo, byDevice, byLandingPage, conversions] =
       await Promise.all([
-        fetchDailyTrafficBySource(today),
-        fetchDailyTrafficByHour(today),
-        fetchDailyTrafficByGeo(today),
-        fetchDailyTrafficByDevice(today),
-        fetchDailyTrafficByLandingPage(today),
-        fetchDailyConversions(today),
+        fetchDailyTrafficBySource(targetDate),
+        fetchDailyTrafficByHour(targetDate),
+        fetchDailyTrafficByGeo(targetDate),
+        fetchDailyTrafficByDevice(targetDate),
+        fetchDailyTrafficByLandingPage(targetDate),
+        fetchDailyConversions(targetDate),
       ]);
 
-    // Delete today's existing rows and re-insert atomically
-    const [year, month, day] = today.split("-").map(Number);
-    const todayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
-    const todayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    const [year, month, day] = targetDate.split("-").map(Number);
+    const dayStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
     await prisma.$transaction(async (tx) => {
-      // Delete today's data
-      await tx.trafficBySource.deleteMany({ where: { capturedAt: { gte: todayStart, lt: todayEnd } } });
-      await tx.trafficByHour.deleteMany({ where: { capturedAt: { gte: todayStart, lt: todayEnd } } });
-      await tx.trafficByGeo.deleteMany({ where: { capturedAt: { gte: todayStart, lt: todayEnd } } });
-      await tx.trafficByDevice.deleteMany({ where: { capturedAt: { gte: todayStart, lt: todayEnd } } });
-      await tx.trafficByLandingPage.deleteMany({ where: { capturedAt: { gte: todayStart, lt: todayEnd } } });
-      await tx.conversionEvent.deleteMany({ where: { capturedAt: { gte: todayStart, lt: todayEnd } } });
-
-      // Insert fresh data — map GA4 field names to Prisma field names
+      // Only replace a table when GA4 returned rows so a delayed/empty batch
+      // never wipes out previously collected rows.
       if (bySource.length > 0) {
+        await tx.trafficBySource.deleteMany({
+          where: { capturedAt: { gte: dayStart, lt: dayEnd } },
+        });
         await tx.trafficBySource.createMany({
           data: bySource.map((row) => ({
-            capturedAt: now,
+            capturedAt,
             source: row.sessionSource,
             medium: row.sessionMedium,
             sessions: row.sessions,
@@ -115,9 +112,12 @@ async function collectDailyTraffic(): Promise<void> {
       }
 
       if (byHour.length > 0) {
+        await tx.trafficByHour.deleteMany({
+          where: { capturedAt: { gte: dayStart, lt: dayEnd } },
+        });
         await tx.trafficByHour.createMany({
           data: byHour.map((row) => ({
-            capturedAt: now,
+            capturedAt,
             dateHour: row.dateHour,
             sessions: row.sessions,
             users: row.totalUsers,
@@ -127,9 +127,12 @@ async function collectDailyTraffic(): Promise<void> {
       }
 
       if (byGeo.length > 0) {
+        await tx.trafficByGeo.deleteMany({
+          where: { capturedAt: { gte: dayStart, lt: dayEnd } },
+        });
         await tx.trafficByGeo.createMany({
           data: byGeo.map((row) => ({
-            capturedAt: now,
+            capturedAt,
             country: row.country,
             region: row.region,
             city: row.city,
@@ -141,9 +144,12 @@ async function collectDailyTraffic(): Promise<void> {
       }
 
       if (byDevice.length > 0) {
+        await tx.trafficByDevice.deleteMany({
+          where: { capturedAt: { gte: dayStart, lt: dayEnd } },
+        });
         await tx.trafficByDevice.createMany({
           data: byDevice.map((row) => ({
-            capturedAt: now,
+            capturedAt,
             deviceCategory: row.deviceCategory,
             sessions: row.sessions,
             users: row.totalUsers,
@@ -153,9 +159,12 @@ async function collectDailyTraffic(): Promise<void> {
       }
 
       if (byLandingPage.length > 0) {
+        await tx.trafficByLandingPage.deleteMany({
+          where: { capturedAt: { gte: dayStart, lt: dayEnd } },
+        });
         await tx.trafficByLandingPage.createMany({
           data: byLandingPage.map((row) => ({
-            capturedAt: now,
+            capturedAt,
             landingPage: row.landingPage,
             sessions: row.sessions,
             users: row.totalUsers,
@@ -166,9 +175,16 @@ async function collectDailyTraffic(): Promise<void> {
       }
 
       if (conversions.length > 0) {
+        // Preserve CRM-sourced conversion rows (crm_lead_form, crm_lead_phone)
+        await tx.conversionEvent.deleteMany({
+          where: {
+            capturedAt: { gte: dayStart, lt: dayEnd },
+            eventName: { notIn: ["crm_lead_form", "crm_lead_phone"] },
+          },
+        });
         await tx.conversionEvent.createMany({
           data: conversions.map((row) => ({
-            capturedAt: now,
+            capturedAt,
             eventName: row.eventName,
             source: row.sessionSource,
             medium: row.sessionMedium,
@@ -179,20 +195,35 @@ async function collectDailyTraffic(): Promise<void> {
     });
 
     console.log(
-      `[Cron] ${ts()} Daily traffic saved — ` +
+      `[Cron] ${ts()} Daily traffic (${targetDate}) saved — ` +
         `source: ${bySource.length}, hour: ${byHour.length}, ` +
         `geo: ${byGeo.length}, device: ${byDevice.length}, ` +
         `landing: ${byLandingPage.length}, conversions: ${conversions.length}`
     );
   } catch (err) {
-    console.error(`[Cron] ${ts()} collectDailyTraffic error:`, err);
+    console.error(`[Cron] ${ts()} collectDailyTraffic (${targetDate}) error:`, err);
   }
+}
+
+async function collectDailyTraffic(): Promise<void> {
+  await collectDailyTrafficForDate(todayString(), getWarsawNow());
 }
 
 // GA4 keeps finalising a day for hours after midnight, so a day fetched only
 // while it was "today" stays frozen at whatever it looked like at 23:00 and is
 // never corrected. Re-fetch a short trailing window instead.
 const SUMMARY_BACKFILL_DAYS = 3;
+
+async function collectDailyTrafficBackfill(): Promise<void> {
+  for (let i = 1; i < SUMMARY_BACKFILL_DAYS; i++) {
+    const targetDate = getWarsawDateString(
+      new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+    );
+    const [year, month, day] = targetDate.split("-").map(Number);
+    const capturedAt = new Date(Date.UTC(year, month - 1, day, 23, 55, 0));
+    await collectDailyTrafficForDate(targetDate, capturedAt);
+  }
+}
 
 async function collectDailySummary(): Promise<void> {
   const today = todayString();
@@ -747,6 +778,7 @@ export async function runCollectionCycle(): Promise<void> {
 async function runHourlyCycle(): Promise<void> {
   console.log(`\n[Cron] ========== Hourly cycle start: ${ts()} ==========`);
   await collectDailySummary();
+  await collectDailyTrafficBackfill();
   await collectPeriodSummaries(PERIODS.filter((p) => p !== "today"));
   await collectGsc();
   await invalidateCache();
@@ -780,7 +812,12 @@ export function startWorker(): void {
 
   console.log(`[Cron] Running initial collection cycle...`);
   runCollectionCycle()
-    .then(() => console.log(`[Cron] Initial collection cycle complete`))
+    .then(async () => {
+      console.log(`[Cron] Initial collection cycle complete; running backfill...`);
+      await collectDailySummary();
+      await collectDailyTrafficBackfill();
+      await invalidateCache();
+    })
     .catch((err) => console.error(`[Cron] Initial collection cycle failed:`, err));
 
   const shutdown = async (signal: string) => {

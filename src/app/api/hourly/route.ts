@@ -3,6 +3,7 @@ import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
 import { getWarsawDateString, getWarsawNow } from '@/lib/utils';
+import { GA4_CONVERSION_EVENTS } from '@/lib/ga4-client';
 
 function toWarsawTimeZoneDate(date: Date): Date {
   const formatter = new Intl.DateTimeFormat('en-US', {
@@ -161,16 +162,59 @@ export async function GET(request: NextRequest) {
   const yesterdayMap = groupByHour(yesterdayData);
   const weekAgoMap = groupByHour(weekAgoData);
 
-  // An hour spans many realtime snapshots. Used only as a stand-in while GA4
-  // still lags on the current hour, so take the busiest snapshot rather than
-  // whichever one happened to land last.
-  const realtimeMap = new Map<number, { activeUsers: number; keyEvents: number }>();
+  // An hour spans two 30-minute realtime windows. Used as a stand-in for any
+  // hour where GA4's standard report has not yet finalized data.
+  type SnapRow = (typeof realtimeSnapshots)[number];
+  const countConvEvents = (snap: SnapRow): number => {
+    if (!Array.isArray(snap.topSources)) return 0;
+    let total = 0;
+    for (const item of snap.topSources as Array<{ eventName?: string; eventCount?: number }>) {
+      if (item.eventName && (GA4_CONVERSION_EVENTS as readonly string[]).includes(item.eventName)) {
+        total += item.eventCount ?? 0;
+      }
+    }
+    return total;
+  };
+  const snapConversions = (snap: SnapRow): number => Math.max(snap.keyEvents, countConvEvents(snap));
+
+  const rtBuckets = new Map<
+    number,
+    { maxUsers: number; h1: SnapRow | null; h2: SnapRow | null }
+  >();
   for (const snap of realtimeSnapshots) {
     const hour = snap.capturedAt.getUTCHours();
-    const prev = realtimeMap.get(hour);
+    const min = snap.capturedAt.getUTCMinutes();
+    const b = rtBuckets.get(hour) ?? { maxUsers: 0, h1: null, h2: null };
+    b.maxUsers = Math.max(b.maxUsers, snap.activeUsers);
+    if (min < 30) b.h1 = snap;
+    else b.h2 = snap;
+    rtBuckets.set(hour, b);
+  }
+
+  const realtimeMap = new Map<
+    number,
+    { sessions: number; users: number; conversions: number }
+  >();
+  for (const [hour, b] of rtBuckets.entries()) {
+    let sessions = 0;
+    let conversions = 0;
+    if (b.h1 && b.h2) {
+      const diffMin = (b.h2.capturedAt.getTime() - b.h1.capturedAt.getTime()) / 60000;
+      const disjoint = diffMin >= 25;
+      const w2 = disjoint ? 1 : Math.max(0, diffMin / 30);
+      sessions = b.h1.activeUsers + Math.round(b.h2.activeUsers * w2);
+      const c1 = snapConversions(b.h1);
+      const c2 = snapConversions(b.h2);
+      conversions = disjoint ? c1 + c2 : Math.max(c1, c2);
+    } else {
+      const s = (b.h1 || b.h2)!;
+      sessions = s.activeUsers;
+      conversions = snapConversions(s);
+    }
     realtimeMap.set(hour, {
-      activeUsers: Math.max(prev?.activeUsers ?? 0, snap.activeUsers),
-      keyEvents: Math.max(prev?.keyEvents ?? 0, snap.keyEvents),
+      sessions,
+      users: Math.min(sessions, b.maxUsers),
+      conversions,
     });
   }
 
@@ -187,7 +231,6 @@ export async function GET(request: NextRequest) {
     const weekAgo = weekAgoMap.get(h);
 
     const isFuture = isToday && h > currentHour;
-    const isRecent = isToday && currentHour - h <= 3;
 
     let sessions: number | null = null;
     let users: number | null = null;
@@ -198,21 +241,17 @@ export async function GET(request: NextRequest) {
         sessions = todayReport.sessions;
         users = todayReport.users;
         conversions = todayReport.conversions;
-      } else if (isRecent) {
+      } else {
         const rt = realtimeMap.get(h);
         if (rt) {
-          sessions = rt.activeUsers;
-          users = rt.activeUsers;
-          conversions = rt.keyEvents;
+          sessions = rt.sessions;
+          users = rt.users;
+          conversions = rt.conversions;
         } else {
           sessions = 0;
           users = 0;
           conversions = 0;
         }
-      } else {
-        sessions = 0;
-        users = 0;
-        conversions = 0;
       }
     }
 
