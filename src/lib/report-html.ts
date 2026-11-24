@@ -1,4 +1,5 @@
 import type { ReportPayload } from './report-builder';
+import { formatDurationCompact } from './call-center-report';
 import {
   getAlertKey,
   normalizeReportVisibility,
@@ -578,6 +579,45 @@ export function renderReportHtml(
       }
     </section>
   </div>
+
+  ${
+    vis.sections.callCenter === true && payload.callCenter
+      ? `<section class="card">
+      <h2 class="card-title">
+        <span>Call Center — Aktywność doradców</span>
+        <span class="card-note">Dostępność netto zespołu: ${escapeHtml(
+          formatDurationCompact(payload.callCenter.totals.availableSec)
+        )} / ${escapeHtml(
+          formatDurationCompact(payload.callCenter.totals.loginSec)
+        )} (${payload.callCenter.totals.availabilityPct.toFixed(1)}%)</span>
+      </h2>
+      ${
+        payload.callCenter.agents.length === 0
+          ? '<p class="empty">Brak danych aktywności doradców w tym okresie.</p>'
+          : `<table><thead><tr><th>Doradca</th><th class="num">Zalogowanie</th><th class="num">Przerwy</th><th class="num">Dostępność</th><th class="num">Przych. (od./nieod.)</th><th class="num">Wych. udane / prób</th><th class="num">Czas rozmów</th><th class="num">Tickety</th></tr></thead><tbody>${payload.callCenter.agents
+              .map(
+                (a) =>
+                  `<tr><td>${escapeHtml(a.agentName)}</td><td class="num">${escapeHtml(
+                    formatDurationCompact(a.loginSec)
+                  )}</td><td class="num">${escapeHtml(
+                    formatDurationCompact(a.pauseSec)
+                  )}</td><td class="num"><strong>${escapeHtml(
+                    formatDurationCompact(a.availableSec)
+                  )}</strong></td><td class="num">${a.inboundAnswered} / ${
+                    a.inboundNotAnswered
+                  }</td><td class="num">${a.outboundSuccess} / ${
+                    a.outboundTotal
+                  }</td><td class="num">${escapeHtml(
+                    formatDurationCompact(a.totalTalkSec)
+                  )}</td><td class="num">${a.ticketsResponded} / ${
+                    a.ticketsClosed
+                  }</td></tr>`
+              )
+              .join('')}</tbody></table>`
+      }
+    </section>`
+      : ''
+  }
 
   <footer class="footer">
     Wygenerowano automatycznie przez Motolia Analytics (GA4 + Thulium CRM). Raport zagregowany bez danych osobowych klientów.

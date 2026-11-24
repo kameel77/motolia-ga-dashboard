@@ -851,6 +851,143 @@ async function refreshOpenThuliumLeads(): Promise<void> {
 }
 
 
+const SYSTEM_AGENT_LOGINS = new Set(["automat", "thulium", "voicebot.motolia"]);
+
+export function parseHmsToSeconds(hms: string | null | undefined): number {
+  if (!hms) return 0;
+  const match = String(hms).trim().match(/^(\d+):(\d{1,2}):(\d{1,2})$/);
+  if (!match) return 0;
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const s = parseInt(match[3], 10);
+  return h * 3600 + m * 60 + s;
+}
+
+function toYmdUtc(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    d.getUTCDate()
+  ).padStart(2, "0")}`;
+}
+
+export async function collectAgentDailyWork(daysBack = 7): Promise<number> {
+  if (!THULIUM_API_KEY) {
+    console.error(`[Cron] ${ts()} THULIUM_API_KEY is not set — skipping agent work report sync.`);
+    return 0;
+  }
+
+  console.log(`[Cron] ${ts()} Syncing Thulium agent daily work reports (${daysBack}d)...`);
+  let syncedRows = 0;
+
+  try {
+    const warsawToday = getWarsawNow();
+    warsawToday.setUTCHours(0, 0, 0, 0);
+    const startWall = new Date(
+      warsawToday.getTime() - Math.max(0, daysBack - 1) * 24 * 60 * 60 * 1000
+    );
+    const dateFrom = `${toYmdUtc(startWall)} 00:00:00`;
+    const dateTo = `${toYmdUtc(warsawToday)} 23:59:59`;
+
+    const rawAgents = await fetchThulium("/agents");
+    const agentsList = Array.isArray(rawAgents)
+      ? rawAgents
+      : rawAgents?.result || rawAgents?.data || [];
+
+    for (const agent of agentsList) {
+      const login = String(agent?.login || "").trim();
+      if (!login || SYSTEM_AGENT_LOGINS.has(login.toLowerCase())) continue;
+
+      const displayName =
+        `${agent?.name || ""} ${agent?.surname || ""}`.trim() || login;
+
+      try {
+        const endpoint =
+          `/agents_work_report?agent_logins[]=${encodeURIComponent(login)}` +
+          `&date_from=${encodeURIComponent(dateFrom)}` +
+          `&date_to=${encodeURIComponent(dateTo)}` +
+          `&aggregate_by=day`;
+        const rows = await fetchThulium(endpoint);
+        const list = Array.isArray(rows) ? rows : rows?.result || [];
+
+        for (const row of list) {
+          const period = String(row?.period || "").trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(period)) continue;
+          const [y, m, d] = period.split("-").map(Number);
+          const dateObj = new Date(Date.UTC(y, m - 1, d));
+
+          const pauses = Array.isArray(row?.pauses) ? row.pauses : [];
+          const allPause = pauses.find((p: any) => p?.id === "all");
+
+          const loginSec = parseHmsToSeconds(row?.login_sum);
+          const pauseSec = parseHmsToSeconds(allPause?.sum);
+          const inboundCount = Number(row?.inbound?.count || 0);
+          const inboundAnswered = Number(row?.inbound?.answered_count || 0);
+          const inboundNotAnswered = Number(row?.inbound?.not_answered_count || 0);
+          const inboundTalkSec = parseHmsToSeconds(row?.inbound?.sum);
+          const outboundAboveCount = Number(row?.outbound_above_threshold?.count || 0);
+          const outboundBelowCount = Number(row?.outbound_below_threshold?.count || 0);
+          const outboundTalkSec =
+            parseHmsToSeconds(row?.outbound_above_threshold?.sum) +
+            parseHmsToSeconds(row?.outbound_below_threshold?.sum);
+          const ticketsResponded = Number(row?.ticket?.responded || 0);
+          const ticketsClosed = Number(row?.ticket?.closed || 0);
+
+          const rowName =
+            `${row?.agent?.name || ""} ${row?.agent?.surname || ""}`.trim() ||
+            displayName;
+
+          await prisma.agentDailyWork.upsert({
+            where: {
+              date_agentLogin: {
+                date: dateObj,
+                agentLogin: login,
+              },
+            },
+            create: {
+              date: dateObj,
+              agentLogin: login,
+              agentName: rowName,
+              loginSec,
+              pauseSec,
+              inboundCount,
+              inboundAnswered,
+              inboundNotAnswered,
+              inboundTalkSec,
+              outboundAboveCount,
+              outboundBelowCount,
+              outboundTalkSec,
+              ticketsResponded,
+              ticketsClosed,
+            },
+            update: {
+              agentName: rowName,
+              loginSec,
+              pauseSec,
+              inboundCount,
+              inboundAnswered,
+              inboundNotAnswered,
+              inboundTalkSec,
+              outboundAboveCount,
+              outboundBelowCount,
+              outboundTalkSec,
+              ticketsResponded,
+              ticketsClosed,
+            },
+          });
+          syncedRows += 1;
+        }
+      } catch (agentErr) {
+        console.warn(`[Cron] ${ts()} Failed agent_work_report for ${login}:`, agentErr);
+      }
+    }
+
+    console.log(`[Cron] ${ts()} Agent daily work sync complete: ${syncedRows} rows`);
+  } catch (err) {
+    console.error(`[Cron] ${ts()} collectAgentDailyWork error:`, err);
+  }
+
+  return syncedRows;
+}
+
 async function collectGsc(): Promise<void> {
   console.log(`[Cron] ${ts()} Collecting GSC data...`);
   try {
@@ -912,6 +1049,7 @@ async function runHourlyCycle(): Promise<void> {
   await collectPeriodSummaries(PERIODS.filter((p) => p !== "today"));
   await backfillLeadStatuses();
   await refreshOpenThuliumLeads();
+  await collectAgentDailyWork(7);
   await collectGsc();
   await invalidateCache();
   console.log(`[Cron] ========== Hourly cycle complete ==========\n`);
@@ -947,6 +1085,7 @@ export function startWorker(): void {
     async () => {
       try {
         console.log(`[Cron] ${ts()} Running scheduled morning report generation...`);
+        await collectAgentDailyWork(7);
         const count = await runScheduledReportGeneration();
         console.log(`[Cron] ${ts()} Generated/updated ${count} report snapshots`);
       } catch (err) {
@@ -964,6 +1103,7 @@ export function startWorker(): void {
       await collectDailyTrafficBackfill();
       await backfillLeadStatuses();
       await refreshOpenThuliumLeads();
+      await collectAgentDailyWork(7);
       const recentThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const recentSnapshot = await prisma.reportSnapshot.findFirst({
         where: { generatedAt: { gte: recentThreshold } },

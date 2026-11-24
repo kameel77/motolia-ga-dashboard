@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   '/api/reports/public',
   '/api/reports/html',
   '/api/reports/digest',
+  '/api/reports/call-center/html',
+  '/api/reports/call-center/digest',
   '/_next',
   '/favicon.ico',
 ];

@@ -294,3 +294,28 @@ model ReportSetting {
 
   @@map("report_settings")
 }
+
+model AgentDailyWork {
+  id                 Int      @id @default(autoincrement())
+  date               DateTime @db.Date
+  agentLogin         String
+  agentName          String
+  loginSec           Int      @default(0)
+  pauseSec           Int      @default(0)
+  inboundCount       Int      @default(0)
+  inboundAnswered    Int      @default(0)
+  inboundNotAnswered Int      @default(0)
+  inboundTalkSec     Int      @default(0)
+  outboundAboveCount Int      @default(0)
+  outboundBelowCount Int      @default(0)
+  outboundTalkSec    Int      @default(0)
+  ticketsResponded   Int      @default(0)
+  ticketsClosed      Int      @default(0)
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
+
+  @@unique([date, agentLogin])
+  @@index([date])
+  @@index([agentLogin])
+  @@map("agent_daily_work")
+}

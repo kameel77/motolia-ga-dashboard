@@ -1,0 +1,37 @@
+.cc-custom-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+}
+
+.cc-date-input {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.cc-agent-login {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cc-good {
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
+.cc-warn {
+  color: var(--accent-yellow);
+  font-weight: 600;
+}
+
+.cc-bad {
+  color: var(--accent-red);
+  font-weight: 600;
+}

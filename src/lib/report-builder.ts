@@ -8,6 +8,10 @@ import {
   type CallLike,
 } from './thulium-mapping';
 import type { ReportAlertKey } from './report-visibility';
+import {
+  buildCallCenterReport,
+  type CallCenterReportData,
+} from './call-center-report';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -143,6 +147,7 @@ export interface ReportPayload {
     }>;
   };
   alerts: ReportAlert[];
+  callCenter?: CallCenterReportData;
 }
 
 function toUtcDateStr(d: Date): string {
@@ -676,9 +681,10 @@ export async function buildReportPayload(
 ): Promise<{ window: ReportWindow; payload: ReportPayload }> {
   const window = getCalendarWindow(granularity, periodKey);
 
-  const [curr, prev] = await Promise.all([
+  const [curr, prev, callCenter] = await Promise.all([
     aggregateWindowMetrics(window.startDate, window.endDate),
     aggregateWindowMetrics(window.baselineStartDate, window.baselineEndDate),
+    buildCallCenterReport(window.startDate, window.endDate, window.label),
   ]);
 
   // Build trend series
@@ -961,6 +967,7 @@ export async function buildReportPayload(
     },
     crm: curr.crm,
     alerts,
+    callCenter,
   };
 
   return { window, payload };

@@ -12,7 +12,7 @@ export type ReportAlertKey =
   | 'zero_web_forms'
   | 'period_normal';
 
-export type ReportSectionKey = 'hotline';
+export type ReportSectionKey = 'hotline' | 'callCenter';
 
 export interface ReportVisibilityConfig {
   kpis: Record<ReportKpiKey, boolean>;
@@ -36,7 +36,7 @@ export const REPORT_ALERT_KEYS: ReportAlertKey[] = [
   'period_normal',
 ];
 
-export const REPORT_SECTION_KEYS: ReportSectionKey[] = ['hotline'];
+export const REPORT_SECTION_KEYS: ReportSectionKey[] = ['hotline', 'callCenter'];
 
 export const DEFAULT_REPORT_VISIBILITY: ReportVisibilityConfig = {
   kpis: {
@@ -55,6 +55,7 @@ export const DEFAULT_REPORT_VISIBILITY: ReportVisibilityConfig = {
   },
   sections: {
     hotline: true,
+    callCenter: false,
   },
 };
 

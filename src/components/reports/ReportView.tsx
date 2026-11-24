@@ -63,6 +63,16 @@ function fmtPln(n: number): string {
   return `${Math.round(n).toLocaleString('pl-PL')} zł`;
 }
 
+function fmtDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rem = s % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  if (m > 0) return `${m}m ${String(rem).padStart(2, '0')}s`;
+  return `${rem}s`;
+}
+
 function renderDelta(deltaPct: number | null) {
   if (deltaPct === null) {
     return <span className="report-delta neutral">brak bazy</span>;
@@ -737,6 +747,90 @@ export default function ReportView({
               )}
             </div>
           </div>
+
+          {payload.callCenter && (!isPublic || vis.sections.callCenter === true) && (
+            <div
+              className={`report-card ${
+                !isPublic && vis.sections.callCenter !== true ? 'is-excluded' : ''
+              }`}
+              style={{ marginTop: 18 }}
+            >
+              <div className="report-card-header">
+                <h2 className="report-card-title">Call Center — Aktywność doradców</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="report-card-note">
+                    Dostępność netto:{' '}
+                    {fmtDuration(payload.callCenter.totals.availableSec)} /{' '}
+                    {fmtDuration(payload.callCenter.totals.loginSec)} (
+                    {payload.callCenter.totals.availabilityPct.toFixed(1)}%)
+                  </span>
+                  {!isPublic && onToggleSection && (
+                    <label
+                      className="report-vis-toggle"
+                      title="Domyślnie ukryte w publicznym HTML — zaznacz, jeśli chcesz pokazać aktywność doradców"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={vis.sections.callCenter === true}
+                        onChange={(e) => onToggleSection('callCenter', e.target.checked)}
+                      />
+                      <span>
+                        {vis.sections.callCenter === true
+                          ? 'Pokaż w HTML'
+                          : 'Ukryte w HTML'}
+                      </span>
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {payload.callCenter.agents.length === 0 ? (
+                <p className="report-card-note">
+                  Brak danych aktywności doradców w tym okresie.
+                </p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="report-table">
+                    <thead>
+                      <tr>
+                        <th>Doradca</th>
+                        <th className="num">Zalogowanie</th>
+                        <th className="num">Przerwy</th>
+                        <th className="num">Dostępność netto</th>
+                        <th className="num">Przych. (od./nieod.)</th>
+                        <th className="num">Wych. udane / prób</th>
+                        <th className="num">Czas rozmów</th>
+                        <th className="num">Tickety</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payload.callCenter.agents.map((a) => (
+                        <tr key={a.agentLogin}>
+                          <td>{a.agentName}</td>
+                          <td className="num">{fmtDuration(a.loginSec)}</td>
+                          <td className="num">{fmtDuration(a.pauseSec)}</td>
+                          <td className="num">
+                            <strong>{fmtDuration(a.availableSec)}</strong> (
+                            {a.availabilityPct.toFixed(0)}%)
+                          </td>
+                          <td className="num">
+                            {a.inboundAnswered} / {a.inboundNotAnswered}
+                          </td>
+                          <td className="num">
+                            {a.outboundSuccess} / {a.outboundTotal}
+                          </td>
+                          <td className="num">{fmtDuration(a.totalTalkSec)}</td>
+                          <td className="num">
+                            {a.ticketsResponded} / {a.ticketsClosed}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
