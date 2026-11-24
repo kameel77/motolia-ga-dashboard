@@ -9,7 +9,7 @@ interface CrmLead {
   clientEmail: string | null;
   clientPhone: string | null;
   source: 'PHONE' | 'EMAIL' | 'WEB_FORM';
-  status: 'NEW' | 'IN_PROGRESS' | 'OFFER' | 'WON' | 'LOST';
+  status: 'NEW' | 'IN_PROGRESS' | 'OFFER' | 'WON' | 'LOST' | 'EXCLUDED';
   thuliumStatus: string;
   queueName: string | null;
   subject: string | null;
@@ -60,6 +60,19 @@ interface AgentStat {
   cr: number;
 }
 
+interface CallSummary {
+  uniqueAnswered: number;
+  uniqueMissed: number;
+  uniqueTotal: number;
+  rawAnswered: number;
+  rawMissed: number;
+  rawShortAnswered: number;
+}
+
+interface HygieneStats {
+  staleNewCount: number;
+}
+
 export default function LeadsPage() {
   // States
   const [leads, setLeads] = useState<CrmLead[]>([]);
@@ -77,6 +90,17 @@ export default function LeadsPage() {
   const [funnelOutcomes, setFunnelOutcomes] = useState<FunnelOutcomes>({ won: 0, lost: 0 });
   const [agents, setAgents] = useState<AgentStat[]>([]);
   const [activeAgentsList, setActiveAgentsList] = useState<string[]>([]);
+  const [callSummary, setCallSummary] = useState<CallSummary>({
+    uniqueAnswered: 0,
+    uniqueMissed: 0,
+    uniqueTotal: 0,
+    rawAnswered: 0,
+    rawMissed: 0,
+    rawShortAnswered: 0,
+  });
+  const [hygiene, setHygiene] = useState<HygieneStats>({ staleNewCount: 0 });
+  const [excludedCount, setExcludedCount] = useState(0);
+  const [includeExcluded, setIncludeExcluded] = useState(false);
   
   const [period, setPeriod] = useState<string>('all'); // 'today', 'week', 'month', 'all', 'custom'
   const [customStartDate, setCustomStartDate] = useState<string>('');
@@ -155,6 +179,7 @@ export default function LeadsPage() {
       if (status) params.append('status', status);
       if (source) params.append('source', source);
       if (agent) params.append('agent', agent);
+      if (includeExcluded) params.append('includeExcluded', 'true');
       if (debouncedSearch) params.append('search', debouncedSearch);
       
       const dateParams = getDateParams();
@@ -174,6 +199,16 @@ export default function LeadsPage() {
         setFunnelOutcomes(data.funnelOutcomes ?? { won: 0, lost: 0 });
         setAgents(data.agents);
         setActiveAgentsList(data.activeAgentsList);
+        setCallSummary(data.callSummary ?? {
+          uniqueAnswered: 0,
+          uniqueMissed: 0,
+          uniqueTotal: 0,
+          rawAnswered: 0,
+          rawMissed: 0,
+          rawShortAnswered: 0,
+        });
+        setHygiene(data.hygiene ?? { staleNewCount: 0 });
+        setExcludedCount(data.excludedCount ?? 0);
         setError(false);
       } else {
         console.error('Failed to fetch leads');
@@ -185,7 +220,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, source, agent, debouncedSearch, page, getDateParams]);
+  }, [status, source, agent, includeExcluded, debouncedSearch, page, getDateParams]);
 
   useEffect(() => {
     fetchLeads();
@@ -224,6 +259,15 @@ export default function LeadsPage() {
       default:
         return <span className="source-badge-crm">{src}</span>;
     }
+  };
+
+  const handleFunnelClick = (stage: string) => {
+    if (stage === 'NEW') {
+      setStatus('');
+    } else {
+      setStatus((prev) => (prev === stage ? '' : stage));
+    }
+    setPage(1);
   };
 
   const maxFunnelCount = Math.max(...funnel.map(f => f.count), 1);
@@ -352,14 +396,73 @@ export default function LeadsPage() {
         </div>
       </div>
 
+      {/* Hotline deduplication & pipeline hygiene bar */}
+      <div className="leads-insights-bar">
+        <div className="insight-pill answered" title="Rozmowy przychodzące odebrane przez doradcę (≥ 30 s), zdeduplikowane po numerze">
+          <span className="insight-dot" />
+          <span>
+            Telefony odebrane (unikalni klienci): <strong>{callSummary.uniqueAnswered}</strong>
+            <span className="insight-meta"> ({callSummary.rawAnswered} rozmów)</span>
+          </span>
+        </div>
+
+        <div className="insight-pill missed" title="Nieodebrane lub porzucone na IVR — wielokrotne próby z jednego numeru liczone są raz">
+          <span className="insight-dot" />
+          <span>
+            Telefony nieodebrane (unikalni klienci): <strong>{callSummary.uniqueMissed}</strong>
+            <span className="insight-meta"> ({callSummary.rawMissed} prób)</span>
+          </span>
+        </div>
+
+        {hygiene.staleNewCount > 0 && (
+          <button
+            type="button"
+            className={`insight-pill warning clickable ${status === 'NEW' ? 'active' : ''}`}
+            onClick={() => {
+              setStatus((prev) => (prev === 'NEW' ? '' : 'NEW'));
+              setPage(1);
+            }}
+            title="Kliknij, aby przefiltrować leady wymagające aktualizacji statusu"
+          >
+            ⚠️ {hygiene.staleNewCount} leadów w statusie Nowy &gt; 24h
+          </button>
+        )}
+
+        {(excludedCount > 0 || includeExcluded) && (
+          <button
+            type="button"
+            className={`insight-pill toggle clickable ${includeExcluded ? 'active' : ''}`}
+            onClick={() => {
+              setIncludeExcluded((prev) => !prev);
+              setPage(1);
+            }}
+            title="Pokaż lub ukryj odfiltrowane tickety (Nieodebrane, SPAM, Połączone, Test)"
+          >
+            {includeExcluded
+              ? `Ukryj odfiltrowane (${excludedCount})`
+              : `Odfiltrowano ${excludedCount} (Nieodebrane / SPAM / duplikaty)`}
+          </button>
+        )}
+      </div>
+
       {/* Funnel Visualization */}
       <div className="funnel-card">
-        <h2 className="funnel-title">Wizualizacja Lejka Konwersji (CRM)</h2>
+        <div className="funnel-title-row">
+          <h2 className="funnel-title">Wizualizacja Lejka Konwersji (CRM)</h2>
+          <span className="funnel-hint">Kliknij etap, aby przefiltrować listę leadów</span>
+        </div>
         <div className="funnel-steps">
           {funnel.map((stage) => {
             const percentage = Math.round((stage.count / maxFunnelCount) * 100);
+            const isActive =
+              stage.stage === 'NEW' ? status === '' : status === stage.stage;
             return (
-              <div key={stage.stage} className={`funnel-step ${stage.stage}`}>
+              <button
+                type="button"
+                key={stage.stage}
+                onClick={() => handleFunnelClick(stage.stage)}
+                className={`funnel-step clickable ${stage.stage} ${isActive ? 'active' : ''}`}
+              >
                 <div className="funnel-step-header">
                   <span className="funnel-step-name">{stage.name}</span>
                   <span className="funnel-step-count">{stage.count}</span>
@@ -372,12 +475,16 @@ export default function LeadsPage() {
                     ? `${Math.round((stage.count / kpis.totalLeads) * 100)}% ogółu`
                     : 'Krok wejściowy'}
                 </div>
-              </div>
+              </button>
             );
           })}
           {/* Outcomes: WON and LOST are parallel exits, not sequential stages */}
           <div className="funnel-outcomes">
-            <div className="funnel-step WON">
+            <button
+              type="button"
+              onClick={() => handleFunnelClick('WON')}
+              className={`funnel-step clickable WON ${status === 'WON' ? 'active' : ''}`}
+            >
               <div className="funnel-step-header">
                 <span className="funnel-step-name">Wygrane</span>
                 <span className="funnel-step-count">{funnelOutcomes.won}</span>
@@ -388,8 +495,12 @@ export default function LeadsPage() {
               <div className="funnel-step-pct">
                 {kpis.totalLeads > 0 ? `${Math.round((funnelOutcomes.won / kpis.totalLeads) * 100)}% ogółu` : '—'}
               </div>
-            </div>
-            <div className="funnel-step LOST">
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFunnelClick('LOST')}
+              className={`funnel-step clickable LOST ${status === 'LOST' ? 'active' : ''}`}
+            >
               <div className="funnel-step-header">
                 <span className="funnel-step-name">Przegrane</span>
                 <span className="funnel-step-count">{funnelOutcomes.lost}</span>
@@ -400,7 +511,7 @@ export default function LeadsPage() {
               <div className="funnel-step-pct">
                 {kpis.totalLeads > 0 ? `${Math.round((funnelOutcomes.lost / kpis.totalLeads) * 100)}% ogółu` : '—'}
               </div>
-            </div>
+            </button>
           </div>
         </div>
       </div>
@@ -469,6 +580,7 @@ export default function LeadsPage() {
               <option value="OFFER">Oferta</option>
               <option value="WON">Wygrany</option>
               <option value="LOST">Przegrany</option>
+              <option value="EXCLUDED">Wykluczone (SPAM/duplikat)</option>
             </select>
 
             <select 

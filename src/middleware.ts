@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const PUBLIC_PATHS = [
   '/login',
+  '/share',
   '/api/auth/login',
   '/api/health',
   '/api/sync',
+  '/api/reports/public',
+  '/api/reports/html',
   '/_next',
   '/favicon.ico',
 ];

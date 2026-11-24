@@ -20,6 +20,13 @@ import {
   fetchPeriodSummary,
 } from "../lib/ga4-client";
 import { fetchGscData } from "../lib/gsc-client";
+import {
+  mapThuliumStatus,
+  mapThuliumSource,
+  isMissedCallTicket,
+  classifyInboundCall,
+} from "../lib/thulium-mapping";
+import { runScheduledReportGeneration } from "../lib/report-builder";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -383,82 +390,6 @@ function parseWarsawDate(dateStr: string | null | undefined): Date {
     return new Date(isoStr + offset);
   }
 }
-function mapThuliumStatus(statusName: string | null): "NEW" | "IN_PROGRESS" | "OFFER" | "WON" | "LOST" {
-  if (!statusName) return "NEW";
-  const s = statusName.toLowerCase();
-
-  // Explicit win markers checked first so "zamknięte - wygrany" maps to WON
-  // before the generic "zamkni" LOST check below. Thulium statuses:
-  // "zamknięte", "zamknięte - wygrany", "zamknięty - przegrany", "zamknięty - spam".
-  if (
-    s.includes("wygran") ||
-    s.includes("sukces") ||
-    s.includes("sprzedan") ||
-    s.includes("zaakceptowane") ||
-    s.includes("won")
-  ) {
-    return "WON";
-  }
-
-  if (
-    s.includes("odrzucon") ||
-    s.includes("przegran") ||
-    s.includes("lost") ||
-    s.includes("spam") ||
-    s.includes("anulowan") ||
-    s.includes("rezygnac") ||
-    s.includes("bez powodzenia") ||
-    // Plain "zamknięte" without a win marker = closed without a sale
-    s.includes("zamkni")
-  ) {
-    return "LOST";
-  }
-  
-  if (
-    s.includes("oferta") || 
-    s.includes("offer") || 
-    s.includes("wycen")
-  ) {
-    return "OFFER";
-  }
-  
-  if (
-    s.includes("otwarty") || 
-    s.includes("kontakt") || 
-    s.includes("proces") || 
-    s.includes("bieżąc") ||
-    s.includes("toku") ||
-    s.includes("podjęt")
-  ) {
-    return "IN_PROGRESS";
-  }
-  
-  if (s.includes("nowy") || s.includes("nowe")) {
-    return "NEW";
-  }
-  
-  return "NEW";
-}
-
-function mapThuliumSource(ticket: any): "PHONE" | "EMAIL" | "WEB_FORM" {
-  const queue = (ticket.ticket_queue_name || "").toLowerCase();
-  const subject = (ticket.subject || "").toLowerCase();
-  const sourceStr = (ticket.source || "").toLowerCase();
-
-  // Missed calls or phone queues are PHONE
-  if (queue.includes("nieodebrane") || subject.includes("nieodebrane")) {
-    return "PHONE";
-  }
-
-  // Website form inquiries that arrive via email or web queues
-  if (queue.includes("oferta_www") || queue.includes("formularz") || subject.includes("[motolia]")) {
-    return "WEB_FORM";
-  }
-
-  if (sourceStr.includes("phone") || sourceStr.includes("telefon") || sourceStr.includes("call")) return "PHONE";
-  if (sourceStr.includes("email") || sourceStr.includes("mail")) return "EMAIL";
-  return "WEB_FORM";
-}
 
 function extractThuliumDetails(ticket: any) {
   let text = "";
@@ -548,30 +479,50 @@ async function collectThulium(): Promise<void> {
         where: { id: String(call.connection_id) }
       });
 
+      const callDirection = call.type || "INBOUND";
+      const callBillsec = parseInt(call.billsec) || 0;
+      const callWaitTime = parseInt(call.wait_time) || 0;
+      const callAgentName = call.user_login || call.dst_user_login || null;
+
       await prisma.crmCall.upsert({
         where: { id: String(call.connection_id) },
         create: {
           id: String(call.connection_id),
-          phone: call.src,
-          direction: call.type || "INBOUND",
+          phone: call.src || "",
+          direction: callDirection,
           disposition: call.disposition,
           duration: parseInt(call.duration) || 0,
-          billsec: parseInt(call.billsec) || 0,
-          agentName: call.user_login || null,
+          billsec: callBillsec,
+          waitTime: callWaitTime,
+          agentName: callAgentName,
           queueName: call.queue_id ? String(call.queue_id) : null,
           timestamp,
         },
         update: {
           disposition: call.disposition,
           duration: parseInt(call.duration) || 0,
-          billsec: parseInt(call.billsec) || 0,
-          agentName: call.user_login || null,
+          billsec: callBillsec,
+          waitTime: callWaitTime,
+          agentName: callAgentName,
           timestamp,
         }
       });
 
-      // Record answered inbound call conversion only for newly discovered calls
-      if (!existingCall && call.disposition === "ANSWERED" && (call.type === "INBOUND" || !call.type)) {
+      const isInboundRealAnswer =
+        (!callDirection || callDirection.toUpperCase() === "INBOUND") &&
+        classifyInboundCall({
+          id: String(call.connection_id),
+          phone: call.src || "",
+          direction: callDirection,
+          disposition: call.disposition,
+          billsec: callBillsec,
+          waitTime: callWaitTime,
+          agentName: callAgentName,
+          timestamp,
+        }) === "ANSWERED";
+
+      // Record answered inbound call conversion only for newly discovered agent-handled calls >= 30s
+      if (!existingCall && isInboundRealAnswer) {
         const capturedAt = new Date(timestamp);
         capturedAt.setUTCSeconds(0, 0);
         capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
@@ -626,22 +577,28 @@ async function collectThulium(): Promise<void> {
 
       const details = extractThuliumDetails(ticket);
       const sourceVal = mapThuliumSource(ticket);
-      const statusVal = mapThuliumStatus(ticket.full_status_name);
+      const thuliumStatusStr = ticket.full_status_name || "Nowy";
+      const statusVal = mapThuliumStatus(
+        thuliumStatusStr,
+        ticket.status_id,
+        ticket.substatus_id
+      );
+      const leadId = String(ticket.ticket_id);
 
       const existingLead = await prisma.crmLead.findUnique({
-        where: { id: String(ticket.ticket_id) }
+        where: { id: leadId }
       });
 
       await prisma.crmLead.upsert({
-        where: { id: String(ticket.ticket_id) },
+        where: { id: leadId },
         create: {
-          id: String(ticket.ticket_id),
+          id: leadId,
           clientName: cust.name,
           clientEmail: cust.email || ticket.from || null,
           clientPhone: cust.phone || null,
           source: sourceVal,
           status: statusVal,
-          thuliumStatus: ticket.full_status_name || "Nowy",
+          thuliumStatus: thuliumStatusStr,
           queueName: ticket.ticket_queue_name || null,
           subject: ticket.subject || null,
           agentName: ticket.user_login || null,
@@ -655,8 +612,14 @@ async function collectThulium(): Promise<void> {
           thuliumUpdatedAt,
         },
         update: {
+          clientName: cust.name && cust.name !== "Klient Anonimowy" ? cust.name : undefined,
+          clientEmail: cust.email || ticket.from || undefined,
+          clientPhone: cust.phone || undefined,
+          source: sourceVal,
           status: statusVal,
-          thuliumStatus: ticket.full_status_name || "Nowy",
+          thuliumStatus: thuliumStatusStr,
+          queueName: ticket.ticket_queue_name || undefined,
+          subject: ticket.subject || undefined,
           agentName: ticket.user_login || null,
           thuliumCreatedAt,
           thuliumUpdatedAt,
@@ -665,16 +628,38 @@ async function collectThulium(): Promise<void> {
       });
 
       if (!existingLead) {
+        await prisma.crmLeadStatusHistory.create({
+          data: {
+            leadId,
+            fromStatus: null,
+            toStatus: statusVal,
+            thuliumStatus: thuliumStatusStr,
+            changedAt: thuliumCreatedAt,
+          },
+        });
+      } else if (existingLead.status !== statusVal) {
+        await prisma.crmLeadStatusHistory.create({
+          data: {
+            leadId,
+            fromStatus: existingLead.status,
+            toStatus: statusVal,
+            thuliumStatus: thuliumStatusStr,
+            changedAt: thuliumUpdatedAt,
+          },
+        });
+      }
+
+      if (!existingLead) {
         const isMissedCall =
           sourceVal === "PHONE" ||
-          (ticket.ticket_queue_name || "").toLowerCase().includes("nieodebrane") ||
-          (ticket.subject || "").toLowerCase().includes("nieodebrane");
+          isMissedCallTicket(ticket.ticket_queue_name, ticket.subject);
+        const isExcluded = statusVal === "EXCLUDED";
         const isSpam =
           statusVal === "LOST" &&
-          (ticket.full_status_name || "").toLowerCase().includes("spam");
+          thuliumStatusStr.toLowerCase().includes("spam");
 
-        // Only record conversions for genuine web/form leads (not missed calls and not spam)
-        if (!isMissedCall && !isSpam) {
+        // Only record conversions for genuine web/form leads (not missed calls, excluded, or spam)
+        if (!isMissedCall && !isExcluded && !isSpam) {
           const capturedAt = new Date(thuliumCreatedAt);
           capturedAt.setUTCSeconds(0, 0);
           capturedAt.setUTCMinutes(capturedAt.getUTCMinutes() < 30 ? 0 : 30);
@@ -717,6 +702,144 @@ async function collectThulium(): Promise<void> {
     console.log(`[Cron] ${ts()} Thulium CRM sync complete. Calls synced: ${callsImported}, Tickets synced: ${ticketsImported}`);
   } catch (err) {
     console.error(`[Cron] ${ts()} collectThulium error:`, err);
+  }
+}
+
+let didBackfillLeadStatuses = false;
+
+/**
+ * One-time per worker lifecycle backfill: ensures historical CrmLead rows
+ * reflect the updated mapThuliumStatus rules (e.g. "Oczekuje na klienta" -> IN_PROGRESS,
+ * "Zamknięte - SPAM" / "Połączone" / "Test" -> EXCLUDED) and have an initial history row.
+ */
+async function backfillLeadStatuses(): Promise<void> {
+  if (didBackfillLeadStatuses) return;
+  try {
+    const leads = await prisma.crmLead.findMany({
+      select: {
+        id: true,
+        status: true,
+        thuliumStatus: true,
+        thuliumCreatedAt: true,
+        thuliumUpdatedAt: true,
+        _count: { select: { statusHistory: true } },
+      },
+    });
+
+    let updatedCount = 0;
+    let historySeeded = 0;
+
+    for (const lead of leads) {
+      const expectedStatus = mapThuliumStatus(lead.thuliumStatus);
+      if (lead.status !== expectedStatus) {
+        await prisma.crmLead.update({
+          where: { id: lead.id },
+          data: { status: expectedStatus },
+        });
+        await prisma.crmLeadStatusHistory.create({
+          data: {
+            leadId: lead.id,
+            fromStatus: lead.status,
+            toStatus: expectedStatus,
+            thuliumStatus: lead.thuliumStatus,
+            changedAt: lead.thuliumUpdatedAt || lead.thuliumCreatedAt,
+          },
+        });
+        updatedCount++;
+      } else if (lead._count.statusHistory === 0) {
+        await prisma.crmLeadStatusHistory.create({
+          data: {
+            leadId: lead.id,
+            fromStatus: null,
+            toStatus: lead.status,
+            thuliumStatus: lead.thuliumStatus,
+            changedAt: lead.thuliumCreatedAt,
+          },
+        });
+        historySeeded++;
+      }
+    }
+
+    didBackfillLeadStatuses = true;
+    console.log(
+      `[Cron] ${ts()} Lead status backfill complete: ${updatedCount} remapped, ${historySeeded} history seeded`
+    );
+  } catch (err) {
+    console.error(`[Cron] ${ts()} backfillLeadStatuses error:`, err);
+  }
+}
+
+/**
+ * Refreshes open leads older than THULIUM_LOOKBACK_DAYS so status transitions
+ * happening after 7 days are still reflected in analytics.motolia.pl.
+ */
+async function refreshOpenThuliumLeads(): Promise<void> {
+  if (!THULIUM_API_KEY) return;
+  console.log(`[Cron] ${ts()} Refreshing open Thulium leads older than ${THULIUM_LOOKBACK_DAYS}d...`);
+
+  try {
+    const cutoff = new Date(Date.now() - THULIUM_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+    const openLeads = await prisma.crmLead.findMany({
+      where: {
+        status: { in: ["NEW", "IN_PROGRESS", "OFFER"] },
+        thuliumCreatedAt: { lt: cutoff },
+      },
+      orderBy: { thuliumUpdatedAt: "asc" },
+      take: 200,
+    });
+
+    if (openLeads.length === 0) return;
+
+    let refreshed = 0;
+    for (const lead of openLeads) {
+      try {
+        const res = await fetchThulium(`/tickets/${lead.id}`);
+        const ticket = res?.result || res;
+        if (!ticket || (!ticket.ticket_id && !ticket.full_status_name)) continue;
+
+        const thuliumStatusStr = ticket.full_status_name || lead.thuliumStatus;
+        const newStatus = mapThuliumStatus(
+          thuliumStatusStr,
+          ticket.status_id,
+          ticket.substatus_id
+        );
+        const thuliumUpdatedAt = ticket.updated_at
+          ? parseWarsawDate(ticket.updated_at)
+          : lead.thuliumUpdatedAt;
+
+        await prisma.crmLead.update({
+          where: { id: lead.id },
+          data: {
+            status: newStatus,
+            thuliumStatus: thuliumStatusStr,
+            agentName: ticket.user_login || lead.agentName,
+            clientEmail: ticket.from || lead.clientEmail,
+            queueName: ticket.ticket_queue_name || lead.queueName,
+            subject: ticket.subject || lead.subject,
+            thuliumUpdatedAt,
+          },
+        });
+
+        if (lead.status !== newStatus) {
+          await prisma.crmLeadStatusHistory.create({
+            data: {
+              leadId: lead.id,
+              fromStatus: lead.status,
+              toStatus: newStatus,
+              thuliumStatus: thuliumStatusStr,
+              changedAt: thuliumUpdatedAt,
+            },
+          });
+        }
+        refreshed++;
+      } catch (ticketErr) {
+        console.warn(`[Cron] ${ts()} Failed to refresh ticket ${lead.id}:`, ticketErr);
+      }
+    }
+
+    console.log(`[Cron] ${ts()} Refreshed ${refreshed}/${openLeads.length} older open Thulium leads`);
+  } catch (err) {
+    console.error(`[Cron] ${ts()} refreshOpenThuliumLeads error:`, err);
   }
 }
 
@@ -780,6 +903,8 @@ async function runHourlyCycle(): Promise<void> {
   await collectDailySummary();
   await collectDailyTrafficBackfill();
   await collectPeriodSummaries(PERIODS.filter((p) => p !== "today"));
+  await backfillLeadStatuses();
+  await refreshOpenThuliumLeads();
   await collectGsc();
   await invalidateCache();
   console.log(`[Cron] ========== Hourly cycle complete ==========\n`);
@@ -810,12 +935,41 @@ export function startWorker(): void {
     }
   });
 
+  cron.schedule(
+    "30 6 * * *",
+    async () => {
+      try {
+        console.log(`[Cron] ${ts()} Running scheduled morning report generation...`);
+        const count = await runScheduledReportGeneration();
+        console.log(`[Cron] ${ts()} Generated/updated ${count} report snapshots`);
+      } catch (err) {
+        console.error(`[Cron] ${ts()} Scheduled report generation failed:`, err);
+      }
+    },
+    { timezone: "Europe/Warsaw" }
+  );
+
   console.log(`[Cron] Running initial collection cycle...`);
   runCollectionCycle()
     .then(async () => {
       console.log(`[Cron] Initial collection cycle complete; running backfill...`);
       await collectDailySummary();
       await collectDailyTrafficBackfill();
+      await backfillLeadStatuses();
+      await refreshOpenThuliumLeads();
+      const recentThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recentSnapshot = await prisma.reportSnapshot.findFirst({
+        where: { generatedAt: { gte: recentThreshold } },
+        select: { id: true },
+      });
+      if (!recentSnapshot) {
+        console.log(`[Cron] ${ts()} No recent report snapshot found; generating initial reports...`);
+        try {
+          await runScheduledReportGeneration();
+        } catch (reportErr) {
+          console.error(`[Cron] ${ts()} Initial report generation failed:`, reportErr);
+        }
+      }
       await invalidateCache();
     })
     .catch((err) => console.error(`[Cron] Initial collection cycle failed:`, err));

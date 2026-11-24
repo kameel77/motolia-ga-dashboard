@@ -18,6 +18,8 @@ interface DailyConv {
   users: number;
   crmForms: number;
   crmPhones: number;
+  crmPhonesAnswered?: number;
+  crmPhonesMissed?: number;
 }
 
 interface EventRow {
@@ -79,7 +81,8 @@ export default function ConversionsPage() {
       Sesje: d.sessions,
       Użytkownicy: d.users,
       'Formularze CRM': d.crmForms,
-      'Połączenia CRM': d.crmPhones,
+      'Tel. odebrane (unikalni)': d.crmPhonesAnswered ?? d.crmPhones,
+      'Tel. nieodebrane (unikalni)': d.crmPhonesMissed ?? 0,
     })) ?? [];
 
   const eventColumns = [
@@ -215,7 +218,8 @@ export default function ConversionsPage() {
                 { key: 'Sesje', color: '#3b82f6', label: 'Sesje' },
                 { key: 'Użytkownicy', color: '#8b5cf6', label: 'Użytkownicy' },
                 { key: 'Formularze CRM', color: '#10b981', label: 'Formularze CRM', yAxisId: 'right' },
-                { key: 'Połączenia CRM', color: '#f97316', label: 'Połączenia CRM', yAxisId: 'right' },
+                { key: 'Tel. odebrane (unikalni)', color: '#f97316', label: 'Tel. odebrane (unikalni)', yAxisId: 'right' },
+                { key: 'Tel. nieodebrane (unikalni)', color: '#ef4444', label: 'Tel. nieodebrane (unikalni)', yAxisId: 'right' },
               ]}
               height={280}
               xTickFormatter={(v) => {

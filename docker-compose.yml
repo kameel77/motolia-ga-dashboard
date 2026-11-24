@@ -19,6 +19,7 @@ services:
       - GA_ANALYTICS_API_KEY=${GA_ANALYTICS_API_KEY}
       - GSC_SITE_URL=${GSC_SITE_URL:-https://motolia.pl/}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://analytics.motolia.pl}
+      - REPORT_SHARE_TOKEN=${REPORT_SHARE_TOKEN}
       - NODE_ENV=production
     networks:
       - motolia-ga-internal

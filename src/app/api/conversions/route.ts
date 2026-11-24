@@ -5,6 +5,7 @@ import { getCache, setCache } from '@/lib/redis';
 import { getWarsawNow, getWarsawDateString, getPeriodRange, type Period } from '@/lib/utils';
 import { GA4_FORM_EVENTS, GA4_PHONE_EVENTS } from '@/lib/ga4-client';
 import { getTodayIntradaySupplement } from '@/lib/intraday';
+import { summarizeInboundCalls, type CallLike } from '@/lib/thulium-mapping';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -117,15 +118,24 @@ export async function GET(request: NextRequest) {
     prisma.crmCall.findMany({
       where: {
         timestamp: { gte: realUtcStartDate, lte: realUtcNow },
-        disposition: 'ANSWERED',
         direction: 'INBOUND',
       },
-      select: { timestamp: true },
+      select: {
+        id: true,
+        phone: true,
+        direction: true,
+        disposition: true,
+        billsec: true,
+        waitTime: true,
+        agentName: true,
+        timestamp: true,
+      },
     }),
     prisma.crmLead.findMany({
       where: {
         thuliumCreatedAt: { gte: realUtcStartDate, lte: realUtcNow },
         source: { not: 'PHONE' },
+        status: { not: 'EXCLUDED' },
         NOT: [
           { queueName: { contains: 'Nieodebrane', mode: 'insensitive' } },
           { subject: { contains: 'Nieodebrane', mode: 'insensitive' } },
@@ -218,20 +228,47 @@ export async function GET(request: NextRequest) {
       ? Math.round((prevTotal / prevTotalSessions) * 10000) / 100
       : 0;
 
-  // 3. Daily snapshot data with real CRM event breakdown
-  const crmByDate = new Map<string, { crmForms: number; crmPhones: number }>();
+  // 3. Daily snapshot data with real CRM event breakdown & deduplicated calls
+  const crmFormsByDate = new Map<string, number>();
   for (const lead of crmLeads) {
     const dateKey = getWarsawDateString(lead.thuliumCreatedAt);
-    const entry = crmByDate.get(dateKey) ?? { crmForms: 0, crmPhones: 0 };
-    entry.crmForms += 1;
-    crmByDate.set(dateKey, entry);
+    crmFormsByDate.set(dateKey, (crmFormsByDate.get(dateKey) ?? 0) + 1);
   }
+
+  const callsByDate = new Map<string, CallLike[]>();
   for (const call of crmCalls) {
     const dateKey = getWarsawDateString(call.timestamp);
-    const entry = crmByDate.get(dateKey) ?? { crmForms: 0, crmPhones: 0 };
-    entry.crmPhones += 1;
-    crmByDate.set(dateKey, entry);
+    const list = callsByDate.get(dateKey) ?? [];
+    list.push(call);
+    callsByDate.set(dateKey, list);
   }
+
+  const crmByDate = new Map<
+    string,
+    {
+      crmForms: number;
+      crmPhones: number;
+      crmPhonesAnswered: number;
+      crmPhonesMissed: number;
+    }
+  >();
+
+  const allDateKeys = new Set<string>([
+    ...crmFormsByDate.keys(),
+    ...callsByDate.keys(),
+  ]);
+  for (const dateKey of allDateKeys) {
+    const dayCalls = callsByDate.get(dateKey) ?? [];
+    const dayCallSummary = summarizeInboundCalls(dayCalls);
+    crmByDate.set(dateKey, {
+      crmForms: crmFormsByDate.get(dateKey) ?? 0,
+      crmPhones: dayCallSummary.uniqueTotal,
+      crmPhonesAnswered: dayCallSummary.uniqueAnswered,
+      crmPhonesMissed: dayCallSummary.uniqueMissed,
+    });
+  }
+
+  const callSummary = summarizeInboundCalls(crmCalls);
 
   const trendData = rawTrendData.map((d) => ({ ...d }));
   const todayIdx = trendData.findIndex(
@@ -256,13 +293,20 @@ export async function GET(request: NextRequest) {
 
   const daily = trendData.map((d) => {
     const dateStr = d.date.toISOString().split('T')[0];
-    const crm = crmByDate.get(dateStr) ?? { crmForms: 0, crmPhones: 0 };
+    const crm = crmByDate.get(dateStr) ?? {
+      crmForms: 0,
+      crmPhones: 0,
+      crmPhonesAnswered: 0,
+      crmPhonesMissed: 0,
+    };
     return {
       date: dateStr,
       sessions: d.sessions,
       users: d.users,
       crmForms: crm.crmForms,
       crmPhones: crm.crmPhones,
+      crmPhonesAnswered: crm.crmPhonesAnswered,
+      crmPhonesMissed: crm.crmPhonesMissed,
     };
   });
 
@@ -283,6 +327,7 @@ export async function GET(request: NextRequest) {
       value: conversionRate,
       previousValue: prevConversionRate,
     },
+    callSummary,
     daily,
     events,
     funnel: [

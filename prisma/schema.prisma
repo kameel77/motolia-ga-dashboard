@@ -180,6 +180,7 @@ enum CrmLeadStatus {
   OFFER
   WON
   LOST
+  EXCLUDED
 }
 
 enum CrmLeadSource {
@@ -209,10 +210,25 @@ model CrmLead {
   thuliumUpdatedAt DateTime
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  statusHistory   CrmLeadStatusHistory[]
 
   @@index([status])
   @@index([thuliumCreatedAt])
   @@map("crm_leads")
+}
+
+model CrmLeadStatusHistory {
+  id            Int            @id @default(autoincrement())
+  leadId        String
+  lead          CrmLead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromStatus    CrmLeadStatus?
+  toStatus      CrmLeadStatus
+  thuliumStatus String
+  changedAt     DateTime       @default(now())
+
+  @@index([leadId, changedAt])
+  @@index([toStatus])
+  @@map("crm_lead_status_history")
 }
 
 model CrmCall {
@@ -222,6 +238,7 @@ model CrmCall {
   disposition  String    // "ANSWERED" | "NO_ANSWER" | "BUSY" etc.
   duration     Int
   billsec      Int
+  waitTime     Int       @default(0)
   agentName    String?
   queueName    String?
   timestamp    DateTime  // Data połączenia
@@ -246,4 +263,26 @@ model GscPerformance {
   @@index([capturedAt])
   @@index([url])
   @@map("gsc_performance")
+}
+
+enum ReportGranularity {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model ReportSnapshot {
+  id          Int               @id @default(autoincrement())
+  granularity ReportGranularity
+  periodKey   String            // "2026-11-22" | "2026-W47" | "2026-11"
+  startDate   DateTime          @db.Date
+  endDate     DateTime          @db.Date
+  isFinal     Boolean           @default(false)
+  payload     Json
+  generatedAt DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([granularity, periodKey])
+  @@index([granularity, startDate])
+  @@map("report_snapshots")
 }
