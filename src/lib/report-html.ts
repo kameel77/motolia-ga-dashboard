@@ -1,4 +1,4 @@
-import type { ReportPayload } from './report-builder';
+import type { ReportCrmData, ReportPayload } from './report-builder';
 import { formatDurationCompact } from './call-center-report';
 import {
   getAlertKey,
@@ -132,6 +132,90 @@ function renderTrendSvg(series: ReportPayload['traffic']['series']): string {
   </svg>`;
 }
 
+function renderCrmPanelContent(crm: ReportCrmData): string {
+  const funnelBase = Math.max(crm.funnel.all, 1);
+  const currentNew =
+    crm.funnel.currentNew ??
+    Math.max(0, crm.funnel.all - crm.funnel.inProgress - crm.funnel.lost);
+  const currentInProgress =
+    crm.funnel.currentInProgress ??
+    Math.max(0, crm.funnel.inProgress - crm.funnel.offer);
+  const currentOffer =
+    crm.funnel.currentOffer ??
+    Math.max(0, crm.funnel.offer - crm.funnel.won);
+
+  const funnelRows = [
+    {
+      label: 'Nowy (czeka na kontakt)',
+      count: currentNew,
+      cohort: null as number | null,
+      color: '#64748b',
+    },
+    {
+      label: 'W kontakcie',
+      count: currentInProgress,
+      cohort: crm.funnel.inProgress > currentInProgress ? crm.funnel.inProgress : null,
+      color: '#2563eb',
+    },
+    {
+      label: 'Oferta / Wniosek',
+      count: currentOffer,
+      cohort: crm.funnel.offer > currentOffer ? crm.funnel.offer : null,
+      color: '#7c3aed',
+    },
+    { label: 'Wygrane', count: crm.funnel.won, cohort: null, color: '#10b981' },
+    { label: 'Przegrane', count: crm.funnel.lost, cohort: null, color: '#ef4444' },
+  ]
+    .map((f) => {
+      const pct = Math.round((f.count / funnelBase) * 100);
+      const cohortHint =
+        f.cohort !== null
+          ? ` <span style="font-weight:400;color:#64748b">(łącznie przeszło: ${fmtNum(f.cohort)})</span>`
+          : '';
+      return `
+      <div class="funnel-row">
+        <div class="funnel-meta">
+          <span>${escapeHtml(f.label)}${cohortHint}</span>
+          <strong>${fmtNum(f.count)} (${pct}%)</strong>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(
+          pct,
+          f.count > 0 ? 3 : 0
+        )}%;background:${f.color}"></div></div>
+      </div>`;
+    })
+    .join('');
+
+  return `
+    <div class="crm-panel-meta">
+      Wszystkie: <strong>${fmtNum(crm.funnel.all)}</strong> • Wygrane: <strong>${fmtPln(
+    crm.wonValue
+  )}</strong>
+    </div>
+    ${funnelRows}
+    <p class="card-note" style="margin-top:10px">
+      W toku: ${fmtPln(crm.activeValue)} • Odfiltrowane (SPAM/Połączone/Test): ${fmtNum(
+    crm.excludedCount
+  )} • Zalegające &gt;24h w Nowy: ${fmtNum(crm.staleNewCount)}
+    </p>
+    ${
+      crm.agents.length === 0
+        ? ''
+        : `<div class="table-scroll"><table style="margin-top:10px"><thead><tr><th>Doradca</th><th class="num">Leady</th><th class="num">Wygrane</th><th class="num">CR</th><th class="num">Wartość</th></tr></thead><tbody>${crm.agents
+            .map(
+              (a) =>
+                `<tr><td>${escapeHtml(a.name)}</td><td class="num">${fmtNum(
+                  a.leads
+                )}</td><td class="num">${fmtNum(
+                  a.won
+                )}</td><td class="num">${fmtPct(
+                  a.crPct
+                )}</td><td class="num">${fmtPln(a.value)}</td></tr>`
+            )
+            .join('')}</tbody></table></div>`
+    }`;
+}
+
 export function renderReportHtml(
   snapshot: {
     granularity: string;
@@ -164,53 +248,46 @@ export function renderReportHtml(
     ? '<span class="badge final">Finalny</span>'
     : '<span class="badge prelim">Wstępny (GA4 w trakcie domykania)</span>';
 
-  const funnelBase = Math.max(payload.crm.funnel.all, 1);
-  const currentNew =
-    payload.crm.funnel.currentNew ??
-    Math.max(0, payload.crm.funnel.all - payload.crm.funnel.inProgress - payload.crm.funnel.lost);
-  const currentInProgress =
-    payload.crm.funnel.currentInProgress ??
-    Math.max(0, payload.crm.funnel.inProgress - payload.crm.funnel.offer);
-  const currentOffer =
-    payload.crm.funnel.currentOffer ??
-    Math.max(0, payload.crm.funnel.offer - payload.crm.funnel.won);
+  const defaultWin =
+    snapshot.granularity === 'WEEKLY'
+      ? 'd7'
+      : snapshot.granularity === 'MONTHLY'
+      ? 'd28'
+      : 'd1';
 
-  const funnelRows = [
-    { label: 'Nowy (czeka na kontakt)', count: currentNew, cohort: null as number | null, color: '#64748b' },
-    {
-      label: 'W kontakcie',
-      count: currentInProgress,
-      cohort: payload.crm.funnel.inProgress > currentInProgress ? payload.crm.funnel.inProgress : null,
-      color: '#2563eb',
-    },
-    {
-      label: 'Oferta / Wniosek',
-      count: currentOffer,
-      cohort: payload.crm.funnel.offer > currentOffer ? payload.crm.funnel.offer : null,
-      color: '#7c3aed',
-    },
-    { label: 'Wygrane', count: payload.crm.funnel.won, cohort: null, color: '#10b981' },
-    { label: 'Przegrane', count: payload.crm.funnel.lost, cohort: null, color: '#ef4444' },
-  ]
-    .map((f) => {
-      const pct = Math.round((f.count / funnelBase) * 100);
-      const cohortHint =
-        f.cohort !== null
-          ? ` <span style="font-weight:400;color:#64748b">(łącznie przeszło: ${fmtNum(f.cohort)})</span>`
-          : '';
-      return `
-      <div class="funnel-row">
-        <div class="funnel-meta">
-          <span>${escapeHtml(f.label)}${cohortHint}</span>
-          <strong>${fmtNum(f.count)} (${pct}%)</strong>
-        </div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(
-          pct,
-          f.count > 0 ? 3 : 0
-        )}%;background:${f.color}"></div></div>
-      </div>`;
-    })
-    .join('');
+  const crmSectionHtml = payload.crmWindows
+    ? `<section class="card crm-card">
+      <h2 class="card-title">
+        <span>Lejek CRM (Thulium)</span>
+      </h2>
+      <input type="radio" class="crm-radio" name="crm-win" id="crm-win-d1"${
+        defaultWin === 'd1' ? ' checked' : ''
+      } />
+      <input type="radio" class="crm-radio" name="crm-win" id="crm-win-d7"${
+        defaultWin === 'd7' ? ' checked' : ''
+      } />
+      <input type="radio" class="crm-radio" name="crm-win" id="crm-win-d28"${
+        defaultWin === 'd28' ? ' checked' : ''
+      } />
+      <div class="crm-tabs" role="tablist" aria-label="Zakres lejka CRM">
+        <label for="crm-win-d1">Wczoraj</label>
+        <label for="crm-win-d7">7 dni</label>
+        <label for="crm-win-d28">28 dni</label>
+      </div>
+      <div class="crm-panel crm-panel-d1">${renderCrmPanelContent(
+        payload.crmWindows.d1
+      )}</div>
+      <div class="crm-panel crm-panel-d7">${renderCrmPanelContent(
+        payload.crmWindows.d7
+      )}</div>
+      <div class="crm-panel crm-panel-d28">${renderCrmPanelContent(
+        payload.crmWindows.d28
+      )}</div>
+    </section>`
+    : `<section class="card crm-card">
+      <h2 class="card-title"><span>Lejek CRM (Thulium)</span></h2>
+      ${renderCrmPanelContent(payload.crm)}
+    </section>`;
 
   const kpiCardsHtml: string[] = [];
   if (vis.kpis.sessions) {
@@ -393,15 +470,66 @@ export function renderReportHtml(
   .hpill .v { font-size: 20px; font-weight: 700; margin-top: 2px; }
 
   .funnel-row { margin-bottom: 10px; }
-  .funnel-meta { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+  .funnel-meta { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; gap: 8px; }
   .bar-track { height: 8px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 999px; }
 
+  .crm-card { position: relative; }
+  .crm-radio { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+  .crm-tabs {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+  .crm-tabs label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 6px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  #crm-win-d1:checked ~ .crm-tabs label[for="crm-win-d1"],
+  #crm-win-d7:checked ~ .crm-tabs label[for="crm-win-d7"],
+  #crm-win-d28:checked ~ .crm-tabs label[for="crm-win-d28"] {
+    background: #2563eb;
+    color: #ffffff;
+  }
+  .crm-panel { display: none; }
+  #crm-win-d1:checked ~ .crm-panel-d1,
+  #crm-win-d7:checked ~ .crm-panel-d7,
+  #crm-win-d28:checked ~ .crm-panel-d28 {
+    display: block;
+  }
+  .crm-panel-meta { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
   .empty { font-size: 13px; color: var(--muted); margin: 8px 0; }
   .footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 16px; }
+  @media (max-width: 640px) {
+    body { padding: 14px 10px; }
+    .header { padding: 18px 16px; }
+    .header-right { text-align: left; }
+    .card { padding: 16px 14px; }
+    .two-col { grid-template-columns: 1fr; }
+    .crm-tabs { display: flex; width: 100%; }
+    .crm-tabs label { flex: 1; min-height: 42px; padding: 8px 10px; }
+  }
   @media print {
     body { background: #ffffff; padding: 0; }
     .card, .kpi { break-inside: avoid; }
+    .crm-tabs { display: none; }
   }
 </style>
 </head>
@@ -460,13 +588,15 @@ export function renderReportHtml(
     </div>
   </section>
 
+  ${crmSectionHtml}
+
   <div class="two-col">
     <section class="card">
       <h2 class="card-title"><span>TOP Kanały ruchu</span><span class="card-note">GA4</span></h2>
       ${
         payload.traffic.topSources.length === 0
           ? '<p class="empty">Brak danych kanałów.</p>'
-          : `<table><thead><tr><th>Źródło / Medium</th><th class="num">Sesje</th><th class="num">Użytk.</th><th class="num">Konw.</th></tr></thead><tbody>${payload.traffic.topSources
+          : `<div class="table-scroll"><table><thead><tr><th>Źródło / Medium</th><th class="num">Sesje</th><th class="num">Użytk.</th><th class="num">Konw.</th></tr></thead><tbody>${payload.traffic.topSources
               .map(
                 (s) =>
                   `<tr><td>${escapeHtml(s.source)} / ${escapeHtml(
@@ -477,7 +607,7 @@ export function renderReportHtml(
                     s.users
                   )}</td><td class="num">${fmtNum(s.conversions)}</td></tr>`
               )
-              .join('')}</tbody></table>`
+              .join('')}</tbody></table></div>`
       }
     </section>
 
@@ -486,7 +616,7 @@ export function renderReportHtml(
       ${
         payload.traffic.topLandingPages.length === 0
           ? '<p class="empty">Brak danych stron docelowych.</p>'
-          : `<table><thead><tr><th>Ścieżka</th><th class="num">Sesje</th><th class="num">Użytk.</th><th class="num">Konw.</th></tr></thead><tbody>${payload.traffic.topLandingPages
+          : `<div class="table-scroll"><table><thead><tr><th>Ścieżka</th><th class="num">Sesje</th><th class="num">Użytk.</th><th class="num">Konw.</th></tr></thead><tbody>${payload.traffic.topLandingPages
               .map(
                 (p) =>
                   `<tr><td>${escapeHtml(p.path)}</td><td class="num">${fmtNum(
@@ -495,15 +625,14 @@ export function renderReportHtml(
                     p.users
                   )}</td><td class="num">${fmtNum(p.conversions)}</td></tr>`
               )
-              .join('')}</tbody></table>`
+              .join('')}</tbody></table></div>`
       }
     </section>
   </div>
 
-  <div class="two-col">
-    ${
-      vis.sections.hotline !== false
-        ? `<section class="card">
+  ${
+    vis.sections.hotline !== false
+      ? `<section class="card">
       <h2 class="card-title">
         <span>Infolinia (Thulium — unikalni klienci)</span>
         <span class="card-note">Odbieralność: ${fmtPct(
@@ -531,7 +660,7 @@ export function renderReportHtml(
       ${
         payload.hotline.queues.length === 0
           ? '<p class="empty">Brak połączeń przychodzących w okresie.</p>'
-          : `<table><thead><tr><th>Kolejka</th><th class="num">Odebrane (unik.)</th><th class="num">Nieodebrane (unik.)</th><th class="num">Próby</th></tr></thead><tbody>${payload.hotline.queues
+          : `<div class="table-scroll"><table><thead><tr><th>Kolejka</th><th class="num">Odebrane (unik.)</th><th class="num">Nieodebrane (unik.)</th><th class="num">Próby</th></tr></thead><tbody>${payload.hotline.queues
               .map(
                 (q) =>
                   `<tr><td>${escapeHtml(
@@ -542,43 +671,11 @@ export function renderReportHtml(
                     q.uniqueMissed
                   )}</td><td class="num">${fmtNum(q.rawTotal)}</td></tr>`
               )
-              .join('')}</tbody></table>`
+              .join('')}</tbody></table></div>`
       }
     </section>`
-        : ''
-    }
-
-    <section class="card">
-      <h2 class="card-title">
-        <span>Lejek CRM (Thulium)</span>
-        <span class="card-note">Wszystkie: ${fmtNum(
-          payload.crm.funnel.all
-        )} • Wygrane: ${fmtPln(payload.crm.wonValue)}</span>
-      </h2>
-      ${funnelRows}
-      <p class="card-note" style="margin-top:10px">
-        W toku: ${fmtPln(payload.crm.activeValue)} • Odfiltrowane (SPAM/Połączone/Test): ${fmtNum(
-    payload.crm.excludedCount
-  )} • Zalegające &gt;24h w Nowy: ${fmtNum(payload.crm.staleNewCount)}
-      </p>
-      ${
-        payload.crm.agents.length === 0
-          ? ''
-          : `<table style="margin-top:10px"><thead><tr><th>Doradca</th><th class="num">Leady</th><th class="num">Wygrane</th><th class="num">CR</th><th class="num">Wartość</th></tr></thead><tbody>${payload.crm.agents
-              .map(
-                (a) =>
-                  `<tr><td>${escapeHtml(a.name)}</td><td class="num">${fmtNum(
-                    a.leads
-                  )}</td><td class="num">${fmtNum(
-                    a.won
-                  )}</td><td class="num">${fmtPct(
-                    a.crPct
-                  )}</td><td class="num">${fmtPln(a.value)}</td></tr>`
-              )
-              .join('')}</tbody></table>`
-      }
-    </section>
-  </div>
+      : ''
+  }
 
   ${
     vis.sections.callCenter === true && payload.callCenter

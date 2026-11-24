@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReportPayload } from '@/lib/report-builder';
 import {
   DEFAULT_REPORT_VISIBILITY,
@@ -213,6 +213,14 @@ export default function ReportView({
   savingVisibility = false,
 }: ReportViewProps) {
   const [copied, setCopied] = useState(false);
+  const defaultCrmRange: 'd1' | 'd7' | 'd28' =
+    granularity === 'WEEKLY' ? 'd7' : granularity === 'MONTHLY' ? 'd28' : 'd1';
+  const [crmRange, setCrmRange] = useState<'d1' | 'd7' | 'd28'>(defaultCrmRange);
+
+  useEffect(() => {
+    setCrmRange(defaultCrmRange);
+  }, [defaultCrmRange]);
+
   const vis = normalizeReportVisibility(visibility);
 
   const handleCopyShare = async () => {
@@ -227,7 +235,8 @@ export default function ReportView({
   };
 
   const payload = snapshot?.payload;
-  const funnelBase = Math.max(payload?.crm.funnel.all ?? 1, 1);
+  const activeCrm = payload?.crmWindows?.[crmRange] ?? payload?.crm;
+  const funnelBase = Math.max(activeCrm?.funnel.all ?? 1, 1);
 
   return (
     <div className="report-page">
@@ -475,6 +484,150 @@ export default function ReportView({
             <TrendSvg series={payload.traffic.series} />
           </div>
 
+          {activeCrm && (
+            <div className="report-card">
+              <div className="report-card-header report-crm-header">
+                <div>
+                  <h2 className="report-card-title">Lejek CRM (Thulium)</h2>
+                  <div className="report-card-note" style={{ marginTop: 2 }}>
+                    Wszystkie: {fmtNum(activeCrm.funnel.all)} • Wygrane:{' '}
+                    {fmtPln(activeCrm.wonValue)}
+                  </div>
+                </div>
+                {payload.crmWindows && (
+                  <div className="report-crm-tabs" role="tablist" aria-label="Zakres lejka CRM">
+                    {(
+                      [
+                        { key: 'd1', label: 'Wczoraj' },
+                        { key: 'd7', label: '7 dni' },
+                        { key: 'd28', label: '28 dni' },
+                      ] as const
+                    ).map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={crmRange === tab.key}
+                        className={`report-crm-tab ${crmRange === tab.key ? 'active' : ''}`}
+                        onClick={() => setCrmRange(tab.key)}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {(() => {
+                const currentNew =
+                  activeCrm.funnel.currentNew ??
+                  Math.max(
+                    0,
+                    activeCrm.funnel.all -
+                      activeCrm.funnel.inProgress -
+                      activeCrm.funnel.lost
+                  );
+                const currentInProgress =
+                  activeCrm.funnel.currentInProgress ??
+                  Math.max(0, activeCrm.funnel.inProgress - activeCrm.funnel.offer);
+                const currentOffer =
+                  activeCrm.funnel.currentOffer ??
+                  Math.max(0, activeCrm.funnel.offer - activeCrm.funnel.won);
+
+                return [
+                  {
+                    label: 'Nowy (czeka na kontakt)',
+                    count: currentNew,
+                    cohort: null as number | null,
+                    color: '#64748b',
+                  },
+                  {
+                    label: 'W kontakcie',
+                    count: currentInProgress,
+                    cohort:
+                      activeCrm.funnel.inProgress > currentInProgress
+                        ? activeCrm.funnel.inProgress
+                        : null,
+                    color: '#2563eb',
+                  },
+                  {
+                    label: 'Oferta / Wniosek',
+                    count: currentOffer,
+                    cohort:
+                      activeCrm.funnel.offer > currentOffer
+                        ? activeCrm.funnel.offer
+                        : null,
+                    color: '#7c3aed',
+                  },
+                  { label: 'Wygrane', count: activeCrm.funnel.won, cohort: null, color: '#10b981' },
+                  { label: 'Przegrane', count: activeCrm.funnel.lost, cohort: null, color: '#ef4444' },
+                ];
+              })().map((row) => {
+                const pct = Math.round((row.count / funnelBase) * 100);
+                return (
+                  <div key={row.label} className="report-funnel-row">
+                    <div className="report-funnel-meta">
+                      <span>
+                        {row.label}
+                        {row.cohort !== null && (
+                          <span className="report-card-note">
+                            {' '}
+                            (łącznie przeszło: {fmtNum(row.cohort)})
+                          </span>
+                        )}
+                      </span>
+                      <strong>
+                        {fmtNum(row.count)} ({pct}%)
+                      </strong>
+                    </div>
+                    <div className="report-bar-track">
+                      <div
+                        className="report-bar-fill"
+                        style={{
+                          width: `${Math.max(pct, row.count > 0 ? 3 : 0)}%`,
+                          background: row.color,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              <p className="report-card-note" style={{ marginTop: 10 }}>
+                W toku: {fmtPln(activeCrm.activeValue)} • Odfiltrowane (SPAM/Połączone/Test):{' '}
+                {fmtNum(activeCrm.excludedCount)} • Zalegające &gt;24h w Nowy:{' '}
+                {fmtNum(activeCrm.staleNewCount)}
+              </p>
+
+              {activeCrm.agents.length > 0 && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="report-table" style={{ marginTop: 10 }}>
+                    <thead>
+                      <tr>
+                        <th>Doradca</th>
+                        <th className="num">Leady</th>
+                        <th className="num">Wygrane</th>
+                        <th className="num">CR</th>
+                        <th className="num">Wartość</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeCrm.agents.map((a) => (
+                        <tr key={a.name}>
+                          <td>{a.name}</td>
+                          <td className="num">{fmtNum(a.leads)}</td>
+                          <td className="num">{fmtNum(a.won)}</td>
+                          <td className="num">{a.crPct.toFixed(1)}%</td>
+                          <td className="num">{fmtPln(a.value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="report-two-col">
             <div className="report-card">
               <div className="report-card-header">
@@ -541,212 +694,94 @@ export default function ReportView({
             </div>
           </div>
 
-          <div className="report-two-col">
-            {(!isPublic || vis.sections.hotline !== false) && (
-              <div
-                className={`report-card ${
-                  !isPublic && vis.sections.hotline === false ? 'is-excluded' : ''
-                }`}
-              >
-                <div className="report-card-header">
-                  <h2 className="report-card-title">Infolinia (unikalni klienci)</h2>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span className="report-card-note">
-                      Odbieralność: {payload.hotline.answerRatePct.toFixed(1)}%
-                    </span>
-                    {!isPublic && onToggleSection && (
-                      <label
-                        className="report-vis-toggle"
-                        title="Zaznacz, aby pokazywać sekcję Infolinia w podglądzie HTML i widoku publicznym"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={vis.sections.hotline !== false}
-                          onChange={(e) => onToggleSection('hotline', e.target.checked)}
-                        />
-                        <span>
-                          {vis.sections.hotline !== false
-                            ? 'Pokaż w HTML'
-                            : 'Ukryte w HTML'}
-                        </span>
-                      </label>
-                    )}
-                  </div>
-                </div>
-
-                <div className="report-hotline-grid">
-                  <div className="report-hotline-box">
-                    <div className="label">Odebrane (unik.)</div>
-                    <div className="val" style={{ color: 'var(--accent-green)' }}>
-                      {fmtNum(payload.hotline.uniqueAnswered)}
-                    </div>
-                    <div className="label">{fmtNum(payload.hotline.rawAnswered)} rozmów ≥30s</div>
-                  </div>
-                  <div className="report-hotline-box">
-                    <div className="label">Nieodebrane (unik.)</div>
-                    <div className="val" style={{ color: 'var(--accent-yellow)' }}>
-                      {fmtNum(payload.hotline.uniqueMissed)}
-                    </div>
-                    <div className="label">{fmtNum(payload.hotline.rawMissed)} prób</div>
-                  </div>
-                  <div className="report-hotline-box">
-                    <div className="label">Oddzwonienia (unik.)</div>
-                    <div className="val" style={{ color: 'var(--accent-blue)' }}>
-                      {fmtNum(payload.hotline.outboundUniqueAnswered ?? 0)}
-                    </div>
-                    <div className="label">
-                      {fmtNum(payload.hotline.outboundRawTotal ?? 0)} prób •{' '}
-                      {fmtNum(payload.hotline.missedCalledBack ?? 0)} z nieodebranych
-                    </div>
-                  </div>
-                  <div className="report-hotline-box">
-                    <div className="label">Krótkie &lt;30s</div>
-                    <div className="val">{fmtNum(payload.hotline.rawShortAnswered)}</div>
-                    <div className="label">Połączone &lt;30s</div>
-                  </div>
-                </div>
-
-                {payload.hotline.queues.length > 0 && (
-                  <table className="report-table">
-                    <thead>
-                      <tr>
-                        <th>Kolejka</th>
-                        <th className="num">Odebrane (unik.)</th>
-                        <th className="num">Nieodebrane (unik.)</th>
-                        <th className="num">Próby</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {payload.hotline.queues.map((q) => (
-                        <tr key={q.queueId}>
-                          <td>{q.queueName}</td>
-                          <td className="num">{fmtNum(q.uniqueAnswered)}</td>
-                          <td className="num">{fmtNum(q.uniqueMissed)}</td>
-                          <td className="num">{fmtNum(q.rawTotal)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-
-            <div className="report-card">
+          {(!isPublic || vis.sections.hotline !== false) && (
+            <div
+              className={`report-card ${
+                !isPublic && vis.sections.hotline === false ? 'is-excluded' : ''
+              }`}
+            >
               <div className="report-card-header">
-                <h2 className="report-card-title">Lejek CRM (Thulium)</h2>
-                <span className="report-card-note">
-                  Wszystkie: {fmtNum(payload.crm.funnel.all)} • Wygrane:{' '}
-                  {fmtPln(payload.crm.wonValue)}
-                </span>
+                <h2 className="report-card-title">Infolinia (unikalni klienci)</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="report-card-note">
+                    Odbieralność: {payload.hotline.answerRatePct.toFixed(1)}%
+                  </span>
+                  {!isPublic && onToggleSection && (
+                    <label
+                      className="report-vis-toggle"
+                      title="Zaznacz, aby pokazywać sekcję Infolinia w podglądzie HTML i widoku publicznym"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={vis.sections.hotline !== false}
+                        onChange={(e) => onToggleSection('hotline', e.target.checked)}
+                      />
+                      <span>
+                        {vis.sections.hotline !== false
+                          ? 'Pokaż w HTML'
+                          : 'Ukryte w HTML'}
+                      </span>
+                    </label>
+                  )}
+                </div>
               </div>
 
-              {(() => {
-                const currentNew =
-                  payload.crm.funnel.currentNew ??
-                  Math.max(
-                    0,
-                    payload.crm.funnel.all -
-                      payload.crm.funnel.inProgress -
-                      payload.crm.funnel.lost
-                  );
-                const currentInProgress =
-                  payload.crm.funnel.currentInProgress ??
-                  Math.max(0, payload.crm.funnel.inProgress - payload.crm.funnel.offer);
-                const currentOffer =
-                  payload.crm.funnel.currentOffer ??
-                  Math.max(0, payload.crm.funnel.offer - payload.crm.funnel.won);
-
-                return [
-                  {
-                    label: 'Nowy (czeka na kontakt)',
-                    count: currentNew,
-                    cohort: null as number | null,
-                    color: '#64748b',
-                  },
-                  {
-                    label: 'W kontakcie',
-                    count: currentInProgress,
-                    cohort:
-                      payload.crm.funnel.inProgress > currentInProgress
-                        ? payload.crm.funnel.inProgress
-                        : null,
-                    color: '#2563eb',
-                  },
-                  {
-                    label: 'Oferta / Wniosek',
-                    count: currentOffer,
-                    cohort:
-                      payload.crm.funnel.offer > currentOffer
-                        ? payload.crm.funnel.offer
-                        : null,
-                    color: '#7c3aed',
-                  },
-                  { label: 'Wygrane', count: payload.crm.funnel.won, cohort: null, color: '#10b981' },
-                  { label: 'Przegrane', count: payload.crm.funnel.lost, cohort: null, color: '#ef4444' },
-                ];
-              })().map((row) => {
-                const pct = Math.round((row.count / funnelBase) * 100);
-                return (
-                  <div key={row.label} className="report-funnel-row">
-                    <div className="report-funnel-meta">
-                      <span>
-                        {row.label}
-                        {row.cohort !== null && (
-                          <span className="report-card-note">
-                            {' '}
-                            (łącznie przeszło: {fmtNum(row.cohort)})
-                          </span>
-                        )}
-                      </span>
-                      <strong>
-                        {fmtNum(row.count)} ({pct}%)
-                      </strong>
-                    </div>
-                    <div className="report-bar-track">
-                      <div
-                        className="report-bar-fill"
-                        style={{
-                          width: `${Math.max(pct, row.count > 0 ? 3 : 0)}%`,
-                          background: row.color,
-                        }}
-                      />
-                    </div>
+              <div className="report-hotline-grid">
+                <div className="report-hotline-box">
+                  <div className="label">Odebrane (unik.)</div>
+                  <div className="val" style={{ color: 'var(--accent-green)' }}>
+                    {fmtNum(payload.hotline.uniqueAnswered)}
                   </div>
-                );
-              })}
+                  <div className="label">{fmtNum(payload.hotline.rawAnswered)} rozmów ≥30s</div>
+                </div>
+                <div className="report-hotline-box">
+                  <div className="label">Nieodebrane (unik.)</div>
+                  <div className="val" style={{ color: 'var(--accent-yellow)' }}>
+                    {fmtNum(payload.hotline.uniqueMissed)}
+                  </div>
+                  <div className="label">{fmtNum(payload.hotline.rawMissed)} prób</div>
+                </div>
+                <div className="report-hotline-box">
+                  <div className="label">Oddzwonienia (unik.)</div>
+                  <div className="val" style={{ color: 'var(--accent-blue)' }}>
+                    {fmtNum(payload.hotline.outboundUniqueAnswered ?? 0)}
+                  </div>
+                  <div className="label">
+                    {fmtNum(payload.hotline.outboundRawTotal ?? 0)} prób •{' '}
+                    {fmtNum(payload.hotline.missedCalledBack ?? 0)} z nieodebranych
+                  </div>
+                </div>
+                <div className="report-hotline-box">
+                  <div className="label">Krótkie &lt;30s</div>
+                  <div className="val">{fmtNum(payload.hotline.rawShortAnswered)}</div>
+                  <div className="label">Połączone &lt;30s</div>
+                </div>
+              </div>
 
-              <p className="report-card-note" style={{ marginTop: 10 }}>
-                W toku: {fmtPln(payload.crm.activeValue)} • Odfiltrowane (SPAM/Połączone/Test):{' '}
-                {fmtNum(payload.crm.excludedCount)} • Zalegające &gt;24h w Nowy:{' '}
-                {fmtNum(payload.crm.staleNewCount)}
-              </p>
-
-              {payload.crm.agents.length > 0 && (
-                <table className="report-table" style={{ marginTop: 10 }}>
+              {payload.hotline.queues.length > 0 && (
+                <table className="report-table">
                   <thead>
                     <tr>
-                      <th>Doradca</th>
-                      <th className="num">Leady</th>
-                      <th className="num">Wygrane</th>
-                      <th className="num">CR</th>
-                      <th className="num">Wartość</th>
+                      <th>Kolejka</th>
+                      <th className="num">Odebrane (unik.)</th>
+                      <th className="num">Nieodebrane (unik.)</th>
+                      <th className="num">Próby</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {payload.crm.agents.map((a) => (
-                      <tr key={a.name}>
-                        <td>{a.name}</td>
-                        <td className="num">{fmtNum(a.leads)}</td>
-                        <td className="num">{fmtNum(a.won)}</td>
-                        <td className="num">{a.crPct.toFixed(1)}%</td>
-                        <td className="num">{fmtPln(a.value)}</td>
+                    {payload.hotline.queues.map((q) => (
+                      <tr key={q.queueId}>
+                        <td>{q.queueName}</td>
+                        <td className="num">{fmtNum(q.uniqueAnswered)}</td>
+                        <td className="num">{fmtNum(q.uniqueMissed)}</td>
+                        <td className="num">{fmtNum(q.rawTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
             </div>
-          </div>
+          )}
 
           {payload.callCenter && (!isPublic || vis.sections.callCenter === true) && (
             <div

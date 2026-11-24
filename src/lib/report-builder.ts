@@ -147,8 +147,15 @@ export interface ReportPayload {
     }>;
   };
   alerts: ReportAlert[];
+  crmWindows?: {
+    d1: ReportCrmData;
+    d7: ReportCrmData;
+    d28: ReportCrmData;
+  };
   callCenter?: CallCenterReportData;
 }
+
+export type ReportCrmData = ReportPayload['crm'];
 
 function toUtcDateStr(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
@@ -375,6 +382,164 @@ function mapQueueLabel(queueId: string | null): string {
   }
 }
 
+function computeCrmSummary(
+  salesLeads: Array<{
+    id: string;
+    source: CrmLeadSource;
+    status: CrmLeadStatus;
+    agentName: string | null;
+    value: number;
+    thuliumCreatedAt: Date;
+    statusHistory: Array<{ toStatus: CrmLeadStatus }>;
+  }>,
+  allTicketsCount: number
+): ReportCrmData {
+  let activeLeads = 0;
+  let wonLeads = 0;
+  let lostLeads = 0;
+  let wonValue = 0;
+  let activeValue = 0;
+  let webFormCount = 0;
+  let phoneLeadCount = 0;
+  let emailLeadCount = 0;
+  let staleNewCount = 0;
+  let currentNew = 0;
+  let currentInProgress = 0;
+  let currentOffer = 0;
+  let reachedInProgress = 0;
+  let reachedOffer = 0;
+
+  const staleCutoff = Date.now() - DAY_MS;
+  const agentMap = new Map<
+    string,
+    { leads: number; won: number; value: number }
+  >();
+
+  for (const lead of salesLeads) {
+    if (lead.source === CrmLeadSource.WEB_FORM) webFormCount += 1;
+    else if (lead.source === CrmLeadSource.PHONE) phoneLeadCount += 1;
+    else if (lead.source === CrmLeadSource.EMAIL) emailLeadCount += 1;
+
+    if (lead.status === CrmLeadStatus.NEW) currentNew += 1;
+    else if (lead.status === CrmLeadStatus.IN_PROGRESS) currentInProgress += 1;
+    else if (lead.status === CrmLeadStatus.OFFER) currentOffer += 1;
+
+    if (lead.status === CrmLeadStatus.WON) {
+      wonLeads += 1;
+      wonValue += lead.value;
+    } else if (lead.status === CrmLeadStatus.LOST) {
+      lostLeads += 1;
+    } else {
+      activeLeads += 1;
+      activeValue += lead.value;
+    }
+
+    if (
+      lead.status === CrmLeadStatus.NEW &&
+      lead.thuliumCreatedAt.getTime() < staleCutoff
+    ) {
+      staleNewCount += 1;
+    }
+
+    const seen = new Set<CrmLeadStatus>([
+      lead.status,
+      ...lead.statusHistory.map((h) => h.toStatus),
+    ]);
+    const hadOffer =
+      seen.has(CrmLeadStatus.OFFER) || seen.has(CrmLeadStatus.WON);
+    const hadInProgress = hadOffer || seen.has(CrmLeadStatus.IN_PROGRESS);
+    if (hadInProgress) reachedInProgress += 1;
+    if (hadOffer) reachedOffer += 1;
+
+    if (lead.agentName) {
+      const a = agentMap.get(lead.agentName) ?? { leads: 0, won: 0, value: 0 };
+      a.leads += 1;
+      if (lead.status === CrmLeadStatus.WON) a.won += 1;
+      a.value += lead.value;
+      agentMap.set(lead.agentName, a);
+    }
+  }
+
+  const totalSalesLeads = salesLeads.length;
+  const excludedCount = Math.max(0, allTicketsCount - totalSalesLeads);
+  const crmCrPct =
+    totalSalesLeads > 0
+      ? Math.round((wonLeads / totalSalesLeads) * 10000) / 100
+      : 0;
+
+  const agents = Array.from(agentMap.entries())
+    .map(([name, a]) => ({
+      name,
+      leads: a.leads,
+      won: a.won,
+      value: Math.round(a.value),
+      crPct: a.leads > 0 ? Math.round((a.won / a.leads) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.leads - a.leads || b.value - a.value);
+
+  return {
+    totalLeads: totalSalesLeads,
+    activeLeads,
+    wonLeads,
+    lostLeads,
+    wonValue: Math.round(wonValue),
+    activeValue: Math.round(activeValue),
+    crPct: crmCrPct,
+    staleNewCount,
+    excludedCount,
+    bySource: {
+      webForm: webFormCount,
+      phone: phoneLeadCount,
+      email: emailLeadCount,
+    },
+    funnel: {
+      all: totalSalesLeads,
+      currentNew,
+      currentInProgress,
+      currentOffer,
+      inProgress: reachedInProgress,
+      offer: reachedOffer,
+      won: wonLeads,
+      lost: lostLeads,
+    },
+    agents,
+  };
+}
+
+async function aggregateCrmWindow(
+  startDate: Date,
+  endDate: Date
+): Promise<ReportCrmData> {
+  const endExclusiveWall = new Date(endDate.getTime() + DAY_MS);
+  const realUtcStart = warsawLocalWallToUtc(startDate);
+  const realUtcEndExclusive = warsawLocalWallToUtc(endExclusiveWall);
+
+  const leadDateWhere: Prisma.CrmLeadWhereInput = {
+    thuliumCreatedAt: { gte: realUtcStart, lt: realUtcEndExclusive },
+  };
+
+  const [salesLeads, allTicketsCount] = await Promise.all([
+    prisma.crmLead.findMany({
+      where: {
+        ...leadDateWhere,
+        status: { not: CrmLeadStatus.EXCLUDED },
+      },
+      select: {
+        id: true,
+        source: true,
+        status: true,
+        agentName: true,
+        value: true,
+        thuliumCreatedAt: true,
+        statusHistory: { select: { toStatus: true } },
+      },
+    }),
+    prisma.crmLead.count({ where: leadDateWhere }),
+  ]);
+
+  return computeCrmSummary(salesLeads, allTicketsCount);
+}
+
 async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
   const endExclusiveWall = new Date(endDate.getTime() + DAY_MS);
   const realUtcStart = warsawLocalWallToUtc(startDate);
@@ -535,92 +700,10 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
         10
       : 0;
 
-  // CRM leads aggregates (strictly aggregate, zero PII)
-  let activeLeads = 0;
-  let wonLeads = 0;
-  let lostLeads = 0;
-  let wonValue = 0;
-  let activeValue = 0;
-  let webFormCount = 0;
-  let phoneLeadCount = 0;
-  let emailLeadCount = 0;
-  let staleNewCount = 0;
-  let currentNew = 0;
-  let currentInProgress = 0;
-  let currentOffer = 0;
-  let reachedInProgress = 0;
-  let reachedOffer = 0;
-
-  const staleCutoff = Date.now() - DAY_MS;
-  const agentMap = new Map<
-    string,
-    { leads: number; won: number; value: number }
-  >();
-
-  for (const lead of salesLeads) {
-    if (lead.source === CrmLeadSource.WEB_FORM) webFormCount += 1;
-    else if (lead.source === CrmLeadSource.PHONE) phoneLeadCount += 1;
-    else if (lead.source === CrmLeadSource.EMAIL) emailLeadCount += 1;
-
-    if (lead.status === CrmLeadStatus.NEW) currentNew += 1;
-    else if (lead.status === CrmLeadStatus.IN_PROGRESS) currentInProgress += 1;
-    else if (lead.status === CrmLeadStatus.OFFER) currentOffer += 1;
-
-    if (lead.status === CrmLeadStatus.WON) {
-      wonLeads += 1;
-      wonValue += lead.value;
-    } else if (lead.status === CrmLeadStatus.LOST) {
-      lostLeads += 1;
-    } else {
-      activeLeads += 1;
-      activeValue += lead.value;
-    }
-
-    if (
-      lead.status === CrmLeadStatus.NEW &&
-      lead.thuliumCreatedAt.getTime() < staleCutoff
-    ) {
-      staleNewCount += 1;
-    }
-
-    const seen = new Set<CrmLeadStatus>([
-      lead.status,
-      ...lead.statusHistory.map((h) => h.toStatus),
-    ]);
-    const hadOffer =
-      seen.has(CrmLeadStatus.OFFER) || seen.has(CrmLeadStatus.WON);
-    const hadInProgress = hadOffer || seen.has(CrmLeadStatus.IN_PROGRESS);
-    if (hadInProgress) reachedInProgress += 1;
-    if (hadOffer) reachedOffer += 1;
-
-    if (lead.agentName) {
-      const a = agentMap.get(lead.agentName) ?? { leads: 0, won: 0, value: 0 };
-      a.leads += 1;
-      if (lead.status === CrmLeadStatus.WON) a.won += 1;
-      a.value += lead.value;
-      agentMap.set(lead.agentName, a);
-    }
-  }
-
-  const totalSalesLeads = salesLeads.length;
-  const excludedCount = Math.max(0, allTicketsCount - totalSalesLeads);
-  const crmCrPct =
-    totalSalesLeads > 0
-      ? Math.round((wonLeads / totalSalesLeads) * 10000) / 100
-      : 0;
-
-  const agents = Array.from(agentMap.entries())
-    .map(([name, a]) => ({
-      name,
-      leads: a.leads,
-      won: a.won,
-      value: Math.round(a.value),
-      crPct: a.leads > 0 ? Math.round((a.won / a.leads) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.leads - a.leads || b.value - a.value);
+  const crm = computeCrmSummary(salesLeads, allTicketsCount);
 
   // Combined marketing leads: genuine web/email forms + deduplicated answered inbound calls
-  const webFormLeads = webFormCount + emailLeadCount;
+  const webFormLeads = crm.bySource.webForm + crm.bySource.email;
   const totalLeads = webFormLeads + callSummary.uniqueAnswered;
   const conversionRatePct =
     sessions > 0 ? Math.round((totalLeads / sessions) * 10000) / 100 : 0;
@@ -644,33 +727,7 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
     answerRatePct,
     queues,
     salesLeads,
-    crm: {
-      totalLeads: totalSalesLeads,
-      activeLeads,
-      wonLeads,
-      lostLeads,
-      wonValue: Math.round(wonValue),
-      activeValue: Math.round(activeValue),
-      crPct: crmCrPct,
-      staleNewCount,
-      excludedCount,
-      bySource: {
-        webForm: webFormCount,
-        phone: phoneLeadCount,
-        email: emailLeadCount,
-      },
-      funnel: {
-        all: totalSalesLeads,
-        currentNew,
-        currentInProgress,
-        currentOffer,
-        inProgress: reachedInProgress,
-        offer: reachedOffer,
-        won: wonLeads,
-        lost: lostLeads,
-      },
-      agents,
-    },
+    crm,
     inboundCalls,
   };
 }
@@ -680,11 +737,18 @@ export async function buildReportPayload(
   periodKey?: string
 ): Promise<{ window: ReportWindow; payload: ReportPayload }> {
   const window = getCalendarWindow(granularity, periodKey);
+  const d7Start = new Date(window.endDate.getTime() - 6 * DAY_MS);
+  const d28Start = new Date(window.endDate.getTime() - 27 * DAY_MS);
 
-  const [curr, prev, callCenter] = await Promise.all([
+  const [curr, prev, callCenter, d1Crm, d7Crm, d28Crm] = await Promise.all([
     aggregateWindowMetrics(window.startDate, window.endDate),
     aggregateWindowMetrics(window.baselineStartDate, window.baselineEndDate),
     buildCallCenterReport(window.startDate, window.endDate, window.label),
+    granularity === ReportGranularity.DAILY
+      ? Promise.resolve(null)
+      : aggregateCrmWindow(window.endDate, window.endDate),
+    aggregateCrmWindow(d7Start, window.endDate),
+    aggregateCrmWindow(d28Start, window.endDate),
   ]);
 
   // Build trend series
@@ -966,6 +1030,11 @@ export async function buildReportPayload(
       queues: curr.queues,
     },
     crm: curr.crm,
+    crmWindows: {
+      d1: d1Crm ?? curr.crm,
+      d7: d7Crm,
+      d28: d28Crm,
+    },
     alerts,
     callCenter,
   };

@@ -361,6 +361,51 @@
   margin-bottom: 10px;
 }
 
+.report-crm-header {
+  flex-wrap: wrap;
+}
+
+.report-crm-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.report-crm-tab {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.report-crm-tab.active {
+  background: var(--accent-blue);
+  color: #ffffff;
+}
+
+@media (max-width: 640px) {
+  .report-page {
+    padding: 14px 12px;
+  }
+  .report-crm-tabs {
+    display: flex;
+    width: 100%;
+  }
+  .report-crm-tab {
+    flex: 1;
+    min-height: 42px;
+  }
+}
+
 .report-funnel-meta {
   display: flex;
   justify-content: space-between;
