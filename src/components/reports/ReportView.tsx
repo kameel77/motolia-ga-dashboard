@@ -2,6 +2,14 @@
 
 import { useState } from 'react';
 import type { ReportPayload } from '@/lib/report-builder';
+import {
+  DEFAULT_REPORT_VISIBILITY,
+  getAlertKey,
+  normalizeReportVisibility,
+  type ReportAlertKey,
+  type ReportKpiKey,
+  type ReportVisibilityConfig,
+} from '@/lib/report-visibility';
 import './report-view.css';
 
 export type Granularity = 'DAILY' | 'WEEKLY' | 'MONTHLY';
@@ -39,6 +47,10 @@ interface ReportViewProps {
   generating?: boolean;
   shareUrl?: string | null;
   shareConfigured?: boolean;
+  visibility?: ReportVisibilityConfig;
+  onToggleKpi?: (key: ReportKpiKey, checked: boolean) => void;
+  onToggleAlert?: (key: ReportAlertKey, checked: boolean) => void;
+  savingVisibility?: boolean;
 }
 
 function fmtNum(n: number): string {
@@ -182,8 +194,13 @@ export default function ReportView({
   generating = false,
   shareUrl,
   shareConfigured,
+  visibility = DEFAULT_REPORT_VISIBILITY,
+  onToggleKpi,
+  onToggleAlert,
+  savingVisibility = false,
 }: ReportViewProps) {
   const [copied, setCopied] = useState(false);
+  const vis = normalizeReportVisibility(visibility);
 
   const handleCopyShare = async () => {
     if (!shareUrl) return;
@@ -324,61 +341,115 @@ export default function ReportView({
       ) : (
         <>
           <div className="report-kpi-grid">
-            <div className="report-kpi-card">
-              <div className="report-kpi-label">Sesje (GA4)</div>
-              <div className="report-kpi-value">{fmtNum(payload.kpi.sessions.value)}</div>
-              <div className="report-kpi-footer">
-                <span>Poprz.: {fmtNum(payload.kpi.sessions.previousValue)}</span>
-                {renderDelta(payload.kpi.sessions.deltaPct)}
-              </div>
-            </div>
-
-            <div className="report-kpi-card">
-              <div className="report-kpi-label">Użytkownicy (GA4)</div>
-              <div className="report-kpi-value">{fmtNum(payload.kpi.users.value)}</div>
-              <div className="report-kpi-footer">
-                <span>Nowi: {fmtNum(payload.kpi.newUsers.value)}</span>
-                {renderDelta(payload.kpi.users.deltaPct)}
-              </div>
-            </div>
-
-            <div className="report-kpi-card">
-              <div className="report-kpi-label">Leady łącznie (WWW + Tel.)</div>
-              <div className="report-kpi-value">{fmtNum(payload.kpi.totalLeads.value)}</div>
-              <div className="report-kpi-footer">
-                <span>CR: {payload.kpi.conversionRatePct.value.toFixed(2)}%</span>
-                {renderDelta(payload.kpi.totalLeads.deltaPct)}
-              </div>
-            </div>
-
-            <div className="report-kpi-card">
-              <div className="report-kpi-label">Formularze / E-mail</div>
-              <div className="report-kpi-value">{fmtNum(payload.kpi.webFormLeads.value)}</div>
-              <div className="report-kpi-footer">
-                <span>Poprz.: {fmtNum(payload.kpi.webFormLeads.previousValue)}</span>
-                {renderDelta(payload.kpi.webFormLeads.deltaPct)}
-              </div>
-            </div>
-
-            <div className="report-kpi-card">
-              <div className="report-kpi-label">Tel. odebrane (unikalni)</div>
-              <div className="report-kpi-value">
-                {fmtNum(payload.kpi.phoneUniqueAnswered.value)}
-              </div>
-              <div className="report-kpi-footer">
-                <span>Nieodebrane: {fmtNum(payload.kpi.phoneUniqueMissed.value)}</span>
-                {renderDelta(payload.kpi.phoneUniqueAnswered.deltaPct)}
-              </div>
-            </div>
+            {(
+              [
+                {
+                  key: 'sessions' as ReportKpiKey,
+                  label: 'Sesje (GA4)',
+                  value: fmtNum(payload.kpi.sessions.value),
+                  sub: `Poprz.: ${fmtNum(payload.kpi.sessions.previousValue)}`,
+                  deltaPct: payload.kpi.sessions.deltaPct,
+                },
+                {
+                  key: 'users' as ReportKpiKey,
+                  label: 'Użytkownicy (GA4)',
+                  value: fmtNum(payload.kpi.users.value),
+                  sub: `Nowi: ${fmtNum(payload.kpi.newUsers.value)}`,
+                  deltaPct: payload.kpi.users.deltaPct,
+                },
+                {
+                  key: 'totalLeads' as ReportKpiKey,
+                  label: 'Leady łącznie (WWW + Tel.)',
+                  value: fmtNum(payload.kpi.totalLeads.value),
+                  sub: `CR: ${payload.kpi.conversionRatePct.value.toFixed(2)}%`,
+                  deltaPct: payload.kpi.totalLeads.deltaPct,
+                },
+                {
+                  key: 'webFormLeads' as ReportKpiKey,
+                  label: 'Formularze / E-mail',
+                  value: fmtNum(payload.kpi.webFormLeads.value),
+                  sub: `Poprz.: ${fmtNum(payload.kpi.webFormLeads.previousValue)}`,
+                  deltaPct: payload.kpi.webFormLeads.deltaPct,
+                },
+                {
+                  key: 'phoneUniqueAnswered' as ReportKpiKey,
+                  label: 'Tel. odebrane (unikalni)',
+                  value: fmtNum(payload.kpi.phoneUniqueAnswered.value),
+                  sub: `Nieodebrane: ${fmtNum(payload.kpi.phoneUniqueMissed.value)}`,
+                  deltaPct: payload.kpi.phoneUniqueAnswered.deltaPct,
+                },
+              ]
+            )
+              .filter((item) => !isPublic || vis.kpis[item.key])
+              .map((item) => {
+                const checked = vis.kpis[item.key];
+                return (
+                  <div
+                    key={item.key}
+                    className={`report-kpi-card ${!checked && !isPublic ? 'is-excluded' : ''}`}
+                  >
+                    <div className="report-kpi-head">
+                      <div className="report-kpi-label">{item.label}</div>
+                      {!isPublic && onToggleKpi && (
+                        <label
+                          className="report-vis-toggle"
+                          title="Zaznacz, aby pokazywać w podglądzie HTML i widoku publicznym"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => onToggleKpi(item.key, e.target.checked)}
+                          />
+                          <span>{checked ? 'HTML' : 'Ukryte'}</span>
+                        </label>
+                      )}
+                    </div>
+                    <div className="report-kpi-value">{item.value}</div>
+                    <div className="report-kpi-footer">
+                      <span>{item.sub}</span>
+                      {renderDelta(item.deltaPct)}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
 
           <div className="report-alerts">
-            {payload.alerts.map((a, idx) => (
-              <div key={idx} className={`report-alert ${a.severity}`}>
-                <strong>{a.title}</strong>
-                <div>{a.detail}</div>
-              </div>
-            ))}
+            {payload.alerts
+              .filter((a) => !isPublic || vis.alerts[getAlertKey(a)])
+              .map((a, idx) => {
+                const alertKey = getAlertKey(a);
+                const checked = vis.alerts[alertKey];
+                return (
+                  <div
+                    key={idx}
+                    className={`report-alert ${a.severity} ${!checked && !isPublic ? 'is-excluded' : ''}`}
+                  >
+                    <div className="report-alert-row">
+                      <div>
+                        <strong>{a.title}</strong>
+                        <div>{a.detail}</div>
+                      </div>
+                      {!isPublic && onToggleAlert && (
+                        <label
+                          className="report-vis-toggle"
+                          title="Zaznacz, aby pokazywać ten alert w podglądzie HTML i widoku publicznym"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => onToggleAlert(alertKey, e.target.checked)}
+                          />
+                          <span>
+                            {checked ? 'Pokaż w HTML' : 'Ukryte w HTML'}
+                            {savingVisibility ? '…' : ''}
+                          </span>
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
 
           <div className="report-card">

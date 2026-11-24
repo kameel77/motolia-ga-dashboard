@@ -3,6 +3,7 @@ import { ReportGranularity } from '@prisma/client';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getShareTokenValue, isShareTokenConfigured } from '@/lib/report-auth';
+import { getReportVisibilityConfig } from '@/lib/report-settings';
 
 function parseGranularity(raw: string | null): ReportGranularity {
   if (raw === 'WEEKLY') return ReportGranularity.WEEKLY;
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
   const periodKey = searchParams.get('periodKey');
 
   try {
-    const [archive, snapshot] = await Promise.all([
+    const [archive, snapshot, visibility] = await Promise.all([
       prisma.reportSnapshot.findMany({
         where: { granularity },
         orderBy: { startDate: 'desc' },
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
             where: { granularity },
             orderBy: { startDate: 'desc' },
           }),
+      getReportVisibilityConfig(),
     ]);
 
     const shareConfigured = isShareTokenConfigured();
@@ -54,6 +56,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       snapshot,
       archive,
+      visibility,
       shareConfigured,
       shareUrl,
     });

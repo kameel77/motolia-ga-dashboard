@@ -1,4 +1,9 @@
 import type { ReportPayload } from './report-builder';
+import {
+  getAlertKey,
+  normalizeReportVisibility,
+  type ReportVisibilityConfig,
+} from './report-visibility';
 
 export function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -126,14 +131,18 @@ function renderTrendSvg(series: ReportPayload['traffic']['series']): string {
   </svg>`;
 }
 
-export function renderReportHtml(snapshot: {
-  granularity: string;
-  periodKey: string;
-  isFinal: boolean;
-  generatedAt: Date | string;
-  payload: ReportPayload;
-}): string {
+export function renderReportHtml(
+  snapshot: {
+    granularity: string;
+    periodKey: string;
+    isFinal: boolean;
+    generatedAt: Date | string;
+    payload: ReportPayload;
+  },
+  visibility?: ReportVisibilityConfig
+): string {
   const { payload } = snapshot;
+  const vis = normalizeReportVisibility(visibility);
   const generatedStr = new Date(snapshot.generatedAt).toLocaleString('pl-PL', {
     timeZone: 'Europe/Warsaw',
     day: '2-digit',
@@ -177,6 +186,63 @@ export function renderReportHtml(snapshot: {
       </div>`;
     })
     .join('');
+
+  const kpiCardsHtml: string[] = [];
+  if (vis.kpis.sessions) {
+    kpiCardsHtml.push(`
+    <div class="kpi">
+      <div class="kpi-label">Sesje (GA4)</div>
+      <div class="kpi-val">${fmtNum(payload.kpi.sessions.value)}</div>
+      <div class="kpi-sub"><span>Poprz.: ${fmtNum(
+        payload.kpi.sessions.previousValue
+      )}</span>${renderDelta(payload.kpi.sessions.deltaPct)}</div>
+    </div>`);
+  }
+  if (vis.kpis.users) {
+    kpiCardsHtml.push(`
+    <div class="kpi">
+      <div class="kpi-label">Użytkownicy (GA4)</div>
+      <div class="kpi-val">${fmtNum(payload.kpi.users.value)}</div>
+      <div class="kpi-sub"><span>Nowi: ${fmtNum(
+        payload.kpi.newUsers.value
+      )}</span>${renderDelta(payload.kpi.users.deltaPct)}</div>
+    </div>`);
+  }
+  if (vis.kpis.totalLeads) {
+    kpiCardsHtml.push(`
+    <div class="kpi">
+      <div class="kpi-label">Leady łącznie (WWW + Tel.)</div>
+      <div class="kpi-val">${fmtNum(payload.kpi.totalLeads.value)}</div>
+      <div class="kpi-sub"><span>CR: ${fmtPct(
+        payload.kpi.conversionRatePct.value,
+        2
+      )}</span>${renderDelta(payload.kpi.totalLeads.deltaPct)}</div>
+    </div>`);
+  }
+  if (vis.kpis.webFormLeads) {
+    kpiCardsHtml.push(`
+    <div class="kpi">
+      <div class="kpi-label">Formularze / E-mail (Thulium)</div>
+      <div class="kpi-val">${fmtNum(payload.kpi.webFormLeads.value)}</div>
+      <div class="kpi-sub"><span>Poprz.: ${fmtNum(
+        payload.kpi.webFormLeads.previousValue
+      )}</span>${renderDelta(payload.kpi.webFormLeads.deltaPct)}</div>
+    </div>`);
+  }
+  if (vis.kpis.phoneUniqueAnswered) {
+    kpiCardsHtml.push(`
+    <div class="kpi">
+      <div class="kpi-label">Tel. odebrane (unikalni)</div>
+      <div class="kpi-val">${fmtNum(payload.kpi.phoneUniqueAnswered.value)}</div>
+      <div class="kpi-sub"><span>Nieodebrane unik.: ${fmtNum(
+        payload.kpi.phoneUniqueMissed.value
+      )}</span>${renderDelta(payload.kpi.phoneUniqueAnswered.deltaPct)}</div>
+    </div>`);
+  }
+
+  const visibleAlerts = payload.alerts.filter(
+    (a) => vis.alerts[getAlertKey(a)]
+  );
 
   return `<!DOCTYPE html>
 <html lang="pl">
@@ -335,54 +401,25 @@ export function renderReportHtml(snapshot: {
     </div>
   </header>
 
-  <section class="kpi-grid">
-    <div class="kpi">
-      <div class="kpi-label">Sesje (GA4)</div>
-      <div class="kpi-val">${fmtNum(payload.kpi.sessions.value)}</div>
-      <div class="kpi-sub"><span>Poprz.: ${fmtNum(
-        payload.kpi.sessions.previousValue
-      )}</span>${renderDelta(payload.kpi.sessions.deltaPct)}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Użytkownicy (GA4)</div>
-      <div class="kpi-val">${fmtNum(payload.kpi.users.value)}</div>
-      <div class="kpi-sub"><span>Nowi: ${fmtNum(
-        payload.kpi.newUsers.value
-      )}</span>${renderDelta(payload.kpi.users.deltaPct)}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Leady łącznie (WWW + Tel.)</div>
-      <div class="kpi-val">${fmtNum(payload.kpi.totalLeads.value)}</div>
-      <div class="kpi-sub"><span>CR: ${fmtPct(
-        payload.kpi.conversionRatePct.value,
-        2
-      )}</span>${renderDelta(payload.kpi.totalLeads.deltaPct)}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Formularze / E-mail (Thulium)</div>
-      <div class="kpi-val">${fmtNum(payload.kpi.webFormLeads.value)}</div>
-      <div class="kpi-sub"><span>Poprz.: ${fmtNum(
-        payload.kpi.webFormLeads.previousValue
-      )}</span>${renderDelta(payload.kpi.webFormLeads.deltaPct)}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Tel. odebrane (unikalni)</div>
-      <div class="kpi-val">${fmtNum(payload.kpi.phoneUniqueAnswered.value)}</div>
-      <div class="kpi-sub"><span>Nieodebrane unik.: ${fmtNum(
-        payload.kpi.phoneUniqueMissed.value
-      )}</span>${renderDelta(payload.kpi.phoneUniqueAnswered.deltaPct)}</div>
-    </div>
-  </section>
+  ${
+    kpiCardsHtml.length > 0
+      ? `<section class="kpi-grid">${kpiCardsHtml.join('')}</section>`
+      : ''
+  }
 
-  <section class="alerts">
-    ${payload.alerts
-      .map(
-        (a) => `<div class="alert ${escapeHtml(a.severity)}"><strong>${escapeHtml(
-          a.title
-        )}</strong><span>${escapeHtml(a.detail)}</span></div>`
-      )
-      .join('')}
-  </section>
+  ${
+    visibleAlerts.length > 0
+      ? `<section class="alerts">${visibleAlerts
+          .map(
+            (a) => `<div class="alert ${escapeHtml(
+              a.severity
+            )}"><strong>${escapeHtml(a.title)}</strong><span>${escapeHtml(
+              a.detail
+            )}</span></div>`
+          )
+          .join('')}</section>`
+      : ''
+  }
 
   <section class="card">
     <h2 class="card-title">

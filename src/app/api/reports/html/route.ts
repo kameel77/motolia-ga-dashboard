@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ReportGranularity } from '@prisma/client';
 import { verifyAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { verifyReportShareToken } from '@/lib/report-auth';
+import {
+  verifyAnalyticsApiKey,
+  verifyReportShareToken,
+} from '@/lib/report-auth';
 import {
   generateAndSaveReport,
   type ReportPayload,
 } from '@/lib/report-builder';
 import { renderReportHtml } from '@/lib/report-html';
+import { getReportVisibilityConfig } from '@/lib/report-settings';
 
 function parseGranularity(raw: string | null): ReportGranularity {
   if (raw === 'WEEKLY') return ReportGranularity.WEEKLY;
@@ -20,9 +24,10 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get('token');
 
   const isAdmin = await verifyAuth(request);
+  const isApiKey = verifyAnalyticsApiKey(request);
   const isViewer = verifyReportShareToken(token);
 
-  if (!isAdmin && !isViewer) {
+  if (!isAdmin && !isApiKey && !isViewer) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -31,18 +36,21 @@ export async function GET(request: NextRequest) {
   const download = searchParams.get('download') === '1';
 
   try {
-    let snapshot = periodKey
-      ? await prisma.reportSnapshot.findUnique({
-          where: {
-            granularity_periodKey: { granularity, periodKey },
-          },
-        })
-      : await prisma.reportSnapshot.findFirst({
-          where: { granularity },
-          orderBy: { startDate: 'desc' },
-        });
+    let [snapshot, visibility] = await Promise.all([
+      periodKey
+        ? prisma.reportSnapshot.findUnique({
+            where: {
+              granularity_periodKey: { granularity, periodKey },
+            },
+          })
+        : prisma.reportSnapshot.findFirst({
+            where: { granularity },
+            orderBy: { startDate: 'desc' },
+          }),
+      getReportVisibilityConfig(),
+    ]);
 
-    if (!snapshot && isAdmin) {
+    if (!snapshot && (isAdmin || isApiKey)) {
       snapshot = await generateAndSaveReport(
         granularity,
         periodKey || undefined,
@@ -60,13 +68,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const html = renderReportHtml({
-      granularity: snapshot.granularity,
-      periodKey: snapshot.periodKey,
-      isFinal: snapshot.isFinal,
-      generatedAt: snapshot.generatedAt,
-      payload: snapshot.payload as unknown as ReportPayload,
-    });
+    const html = renderReportHtml(
+      {
+        granularity: snapshot.granularity,
+        periodKey: snapshot.periodKey,
+        isFinal: snapshot.isFinal,
+        generatedAt: snapshot.generatedAt,
+        payload: snapshot.payload as unknown as ReportPayload,
+      },
+      visibility
+    );
 
     const headers: Record<string, string> = {
       'Content-Type': 'text/html; charset=utf-8',

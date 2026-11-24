@@ -2,6 +2,7 @@ import { CrmLeadSource, CrmLeadStatus, Prisma, ReportGranularity } from '@prisma
 import { prisma } from './prisma';
 import { getWarsawDateString, getWarsawNow } from './utils';
 import { summarizeInboundCalls, type CallLike } from './thulium-mapping';
+import type { ReportAlertKey } from './report-visibility';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -12,6 +13,7 @@ export interface KpiMetric {
 }
 
 export interface ReportAlert {
+  code?: ReportAlertKey;
   severity: 'positive' | 'warning' | 'info';
   title: string;
   detail: string;
@@ -806,6 +808,7 @@ export async function buildReportPayload(
   const alerts: ReportAlert[] = [];
   if (curr.answerRatePct < 75 && curr.callSummary.uniqueMissed >= 3) {
     alerts.push({
+      code: 'low_answer_rate',
       severity: 'warning',
       title: `Niska odbieralność infolinii (${curr.answerRatePct}%)`,
       detail: `${curr.callSummary.uniqueMissed} unikalnych klientów (${curr.callSummary.rawMissed} prób) nie dodzwoniło się lub rozłączyło na IVR.`,
@@ -813,6 +816,7 @@ export async function buildReportPayload(
   }
   if (curr.crm.staleNewCount > 0) {
     alerts.push({
+      code: 'stale_new_leads',
       severity: 'warning',
       title: `${curr.crm.staleNewCount} leadów zalega w statusie "Nowy" > 24h`,
       detail: 'Wymagana aktualizacja statusów w Thulium przez doradców, aby lejek odzwierciedlał realny stan rozmów.',
@@ -821,12 +825,14 @@ export async function buildReportPayload(
   const sessionsDelta = calcDeltaPct(curr.sessions, prev.sessions);
   if (sessionsDelta !== null && sessionsDelta >= 20) {
     alerts.push({
+      code: 'traffic_change',
       severity: 'positive',
       title: `Wzrost ruchu o +${sessionsDelta}% vs ${window.baselineLabel}`,
       detail: `${curr.sessions.toLocaleString('pl-PL')} sesji wobec ${prev.sessions.toLocaleString('pl-PL')} w okresie bazowym.`,
     });
   } else if (sessionsDelta !== null && sessionsDelta <= -20) {
     alerts.push({
+      code: 'traffic_change',
       severity: 'warning',
       title: `Spadek ruchu o ${sessionsDelta}% vs ${window.baselineLabel}`,
       detail: `${curr.sessions.toLocaleString('pl-PL')} sesji wobec ${prev.sessions.toLocaleString('pl-PL')} w okresie bazowym.`,
@@ -834,6 +840,7 @@ export async function buildReportPayload(
   }
   if (curr.webFormLeads === 0 && curr.sessions >= 100) {
     alerts.push({
+      code: 'zero_web_forms',
       severity: 'warning',
       title: 'Zero formularzy WWW przy aktywnym ruchu',
       detail: `Zarejestrowano ${curr.sessions.toLocaleString('pl-PL')} sesji, ale ani jednego leada formularzowego w Thulium.`,
@@ -841,6 +848,7 @@ export async function buildReportPayload(
   }
   if (alerts.length === 0) {
     alerts.push({
+      code: 'period_normal',
       severity: 'info',
       title: 'Przebieg okresu w normie',
       detail: `Łącznie ${curr.totalLeads} zdeduplikowanych leadów (formularze + odebrane telefony) przy ${curr.sessions.toLocaleString('pl-PL')} sesjach.`,

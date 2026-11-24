@@ -7,6 +7,10 @@ import ReportView, {
   type Granularity,
   type SnapshotRecord,
 } from '@/components/reports/ReportView';
+import {
+  DEFAULT_REPORT_VISIBILITY,
+  type ReportVisibilityConfig,
+} from '@/lib/report-visibility';
 
 export default function PublicShareReportPage() {
   const params = useParams<{ token: string }>();
@@ -16,6 +20,9 @@ export default function PublicShareReportPage() {
   const [periodKey, setPeriodKey] = useState<string>('');
   const [snapshot, setSnapshot] = useState<SnapshotRecord | null>(null);
   const [archive, setArchive] = useState<ArchiveEntry[]>([]);
+  const [visibility, setVisibility] = useState<ReportVisibilityConfig>(
+    DEFAULT_REPORT_VISIBILITY
+  );
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
 
@@ -37,6 +44,7 @@ export default function PublicShareReportPage() {
         const data = await res.json();
         setSnapshot(data.snapshot ?? null);
         setArchive(data.archive ?? []);
+        if (data.visibility) setVisibility(data.visibility);
       }
     } catch (err) {
       console.error('Failed to load shared report:', err);
@@ -85,6 +93,7 @@ export default function PublicShareReportPage() {
         downloadHref={`/api/reports/html?${htmlQuery}&download=1`}
         loading={loading}
         isPublic
+        visibility={visibility}
       />
     </div>
   );

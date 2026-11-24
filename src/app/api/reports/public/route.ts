@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ReportGranularity } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { verifyReportShareToken } from '@/lib/report-auth';
+import { getReportVisibilityConfig } from '@/lib/report-settings';
 
 function parseGranularity(raw: string | null): ReportGranularity {
   if (raw === 'WEEKLY') return ReportGranularity.WEEKLY;
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
   const periodKey = searchParams.get('periodKey');
 
   try {
-    const [archive, snapshot] = await Promise.all([
+    const [archive, snapshot, visibility] = await Promise.all([
       prisma.reportSnapshot.findMany({
         where: { granularity },
         orderBy: { startDate: 'desc' },
@@ -44,11 +45,13 @@ export async function GET(request: NextRequest) {
             where: { granularity },
             orderBy: { startDate: 'desc' },
           }),
+      getReportVisibilityConfig(),
     ]);
 
     return NextResponse.json({
       snapshot,
       archive,
+      visibility,
     });
   } catch (err: any) {
     console.error('[API /reports/public] error:', err);
