@@ -6,6 +6,7 @@ import {
   mapThuliumSource,
   isMissedCallTicket,
   classifyInboundCall,
+  normalizePhone,
 } from '@/lib/thulium-mapping';
 
 function parseWarsawDate(dateStr: string | null | undefined): Date {
@@ -202,6 +203,11 @@ export async function POST(request: NextRequest) {
       const callBillsec = Number(call.billsec || 0);
       const callWaitTime = Number(call.waitTime ?? call.wait_time ?? 0);
       const callAgentName = call.agentName || null;
+      const rawCallPhone =
+        callDirection.toUpperCase() === 'OUTBOUND'
+          ? call.dst || call.phone || ''
+          : call.phone || '';
+      const callPhone = normalizePhone(rawCallPhone) || rawCallPhone;
 
       // Check if call already exists
       const existingCall = await prisma.crmCall.findUnique({
@@ -213,7 +219,7 @@ export async function POST(request: NextRequest) {
         await prisma.crmCall.create({
           data: {
             id: call.id,
-            phone: call.phone,
+            phone: callPhone,
             direction: callDirection,
             disposition: call.disposition,
             duration: Number(call.duration || 0),
@@ -284,7 +290,7 @@ export async function POST(request: NextRequest) {
         await prisma.crmCall.update({
           where: { id: call.id },
           data: {
-            phone: call.phone,
+            phone: callPhone,
             direction: callDirection,
             disposition: call.disposition,
             duration: Number(call.duration || 0),

@@ -1,7 +1,12 @@
 import { CrmLeadSource, CrmLeadStatus, Prisma, ReportGranularity } from '@prisma/client';
 import { prisma } from './prisma';
 import { getWarsawDateString, getWarsawNow } from './utils';
-import { summarizeInboundCalls, type CallLike } from './thulium-mapping';
+import {
+  getMissedPhoneKeys,
+  summarizeInboundCalls,
+  summarizeOutboundCalls,
+  type CallLike,
+} from './thulium-mapping';
 import type { ReportAlertKey } from './report-visibility';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -92,6 +97,10 @@ export interface ReportPayload {
     rawMissed: number;
     rawShortAnswered: number;
     answerRatePct: number;
+    outboundUniqueAnswered?: number;
+    outboundRawAnswered?: number;
+    outboundRawTotal?: number;
+    missedCalledBack?: number;
     queues: Array<{
       queueId: string;
       queueName: string;
@@ -117,6 +126,9 @@ export interface ReportPayload {
     };
     funnel: {
       all: number;
+      currentNew?: number;
+      currentInProgress?: number;
+      currentOffer?: number;
       inProgress: number;
       offer: number;
       won: number;
@@ -365,10 +377,6 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
 
   const salesLeadWhere: Prisma.CrmLeadWhereInput = {
     status: { not: CrmLeadStatus.EXCLUDED },
-    NOT: [
-      { queueName: { contains: 'Nieodebrane', mode: 'insensitive' } },
-      { subject: { contains: 'Nieodebrane', mode: 'insensitive' } },
-    ],
   };
 
   const leadDateWhere: Prisma.CrmLeadWhereInput = {
@@ -382,7 +390,7 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
     landingRows,
     deviceRows,
     tvSpotsCount,
-    inboundCalls,
+    allCalls,
     salesLeads,
     allTicketsCount,
   ] = await Promise.all([
@@ -426,7 +434,6 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
     prisma.crmCall.findMany({
       where: {
         timestamp: { gte: realUtcStart, lt: realUtcEndExclusive },
-        direction: 'INBOUND',
       },
       select: {
         id: true,
@@ -486,8 +493,17 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
     }
   }
 
-  // Inbound calls summary (deduplicated) + queue breakdown
+  const inboundCalls = allCalls.filter(
+    (c) => !c.direction || c.direction.toUpperCase() === 'INBOUND'
+  );
+  const outboundCalls = allCalls.filter(
+    (c) => c.direction && c.direction.toUpperCase() === 'OUTBOUND'
+  );
+
+  // Inbound + outbound calls summary (deduplicated) + queue breakdown
   const callSummary = summarizeInboundCalls(inboundCalls);
+  const missedPhoneKeys = getMissedPhoneKeys(inboundCalls);
+  const outboundSummary = summarizeOutboundCalls(outboundCalls, missedPhoneKeys);
   const queueBuckets = new Map<string, CallLike[]>();
   for (const c of inboundCalls) {
     const qKey = c.queueName || '';
@@ -524,6 +540,9 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
   let phoneLeadCount = 0;
   let emailLeadCount = 0;
   let staleNewCount = 0;
+  let currentNew = 0;
+  let currentInProgress = 0;
+  let currentOffer = 0;
   let reachedInProgress = 0;
   let reachedOffer = 0;
 
@@ -537,6 +556,10 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
     if (lead.source === CrmLeadSource.WEB_FORM) webFormCount += 1;
     else if (lead.source === CrmLeadSource.PHONE) phoneLeadCount += 1;
     else if (lead.source === CrmLeadSource.EMAIL) emailLeadCount += 1;
+
+    if (lead.status === CrmLeadStatus.NEW) currentNew += 1;
+    else if (lead.status === CrmLeadStatus.IN_PROGRESS) currentInProgress += 1;
+    else if (lead.status === CrmLeadStatus.OFFER) currentOffer += 1;
 
     if (lead.status === CrmLeadStatus.WON) {
       wonLeads += 1;
@@ -612,6 +635,7 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
     deviceRows,
     tvSpotsCount,
     callSummary,
+    outboundSummary,
     answerRatePct,
     queues,
     salesLeads,
@@ -632,6 +656,9 @@ async function aggregateWindowMetrics(startDate: Date, endDate: Date) {
       },
       funnel: {
         all: totalSalesLeads,
+        currentNew,
+        currentInProgress,
+        currentOffer,
         inProgress: reachedInProgress,
         offer: reachedOffer,
         won: wonLeads,
@@ -928,6 +955,7 @@ export async function buildReportPayload(
     },
     hotline: {
       ...curr.callSummary,
+      ...curr.outboundSummary,
       answerRatePct: curr.answerRatePct,
       queues: curr.queues,
     },

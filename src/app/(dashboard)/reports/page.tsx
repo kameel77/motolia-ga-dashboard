@@ -10,6 +10,7 @@ import {
   DEFAULT_REPORT_VISIBILITY,
   type ReportAlertKey,
   type ReportKpiKey,
+  type ReportSectionKey,
   type ReportVisibilityConfig,
 } from '@/lib/report-visibility';
 
@@ -99,6 +100,16 @@ export default function ReportsPage() {
     void persistVisibility(next, prev);
   };
 
+  const handleToggleSection = (key: ReportSectionKey, checked: boolean) => {
+    const prev = visibility;
+    const next: ReportVisibilityConfig = {
+      ...prev,
+      sections: { ...prev.sections, [key]: checked },
+    };
+    setVisibility(next);
+    void persistVisibility(next, prev);
+  };
+
   const handleGranularityChange = (g: Granularity) => {
     setGranularity(g);
     setPeriodKey('');
@@ -140,6 +151,7 @@ export default function ReportsPage() {
       visibility={visibility}
       onToggleKpi={handleToggleKpi}
       onToggleAlert={handleToggleAlert}
+      onToggleSection={handleToggleSection}
       savingVisibility={savingVisibility}
     />
   );

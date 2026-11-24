@@ -269,6 +269,12 @@
   padding: 20px;
   margin-bottom: 18px;
   box-shadow: var(--shadow-sm);
+  transition: opacity var(--transition-fast);
+}
+
+.report-card.is-excluded {
+  opacity: 0.55;
+  border-style: dashed;
 }
 
 .report-card-header {

@@ -160,13 +160,15 @@ export function mapThuliumSource(ticket: {
 
 /**
  * Normalizes a phone number for client-level deduplication:
- * strips non-digits, strips leading international "00", and prefixes 9-digit PL numbers with "48".
+ * strips non-digits, strips Thulium outbound prefix "999999", leading international "00",
+ * and prefixes 9-digit PL numbers with "48".
  */
 export function normalizePhone(phone: string | null | undefined): string {
   if (!phone) return '';
   let digits = phone.replace(/\D/g, '');
   if (!digits) return '';
 
+  digits = digits.replace(/^999999/, '');
   if (digits.startsWith('00')) {
     digits = digits.slice(2);
   }
@@ -262,5 +264,85 @@ export function summarizeInboundCalls(calls: CallLike[]): InboundCallSummary {
     rawAnswered,
     rawMissed,
     rawShortAnswered,
+  };
+}
+
+/**
+ * Returns normalized phone keys for inbound callers who missed/abandoned
+ * and did NOT reach an agent in the provided call list.
+ */
+export function getMissedPhoneKeys(calls: CallLike[]): Set<string> {
+  const answeredPhones = new Set<string>();
+  const missedPhones = new Set<string>();
+
+  for (const call of calls) {
+    if (call.direction && call.direction.toUpperCase() !== 'INBOUND') {
+      continue;
+    }
+    const normalized = normalizePhone(call.phone);
+    if (!normalized) continue;
+    const classification = classifyInboundCall(call);
+    if (classification === 'ANSWERED') {
+      answeredPhones.add(normalized);
+    } else if (classification === 'MISSED') {
+      missedPhones.add(normalized);
+    }
+  }
+
+  const result = new Set<string>();
+  for (const key of missedPhones) {
+    if (!answeredPhones.has(key)) {
+      result.add(key);
+    }
+  }
+  return result;
+}
+
+export interface OutboundCallSummary {
+  outboundUniqueAnswered: number;
+  outboundRawAnswered: number;
+  outboundRawTotal: number;
+  missedCalledBack: number;
+}
+
+/**
+ * Summarizes outbound calls (agent callbacks / follow-ups) deduplicated by client phone.
+ * Only calls with ANSWERED disposition and billsec >= 30s count as effective callbacks.
+ */
+export function summarizeOutboundCalls(
+  calls: CallLike[],
+  missedPhoneKeys?: Set<string>
+): OutboundCallSummary {
+  const answeredPhones = new Set<string>();
+  let outboundRawAnswered = 0;
+  let outboundRawTotal = 0;
+
+  calls.forEach((call, idx) => {
+    if (!call.direction || call.direction.toUpperCase() !== 'OUTBOUND') {
+      return;
+    }
+
+    outboundRawTotal += 1;
+    if (call.disposition === 'ANSWERED' && (call.billsec || 0) >= 30) {
+      outboundRawAnswered += 1;
+      const normalized = normalizePhone(call.phone);
+      answeredPhones.add(normalized || `anon:${call.id || idx}`);
+    }
+  });
+
+  let missedCalledBack = 0;
+  if (missedPhoneKeys && missedPhoneKeys.size > 0) {
+    for (const key of missedPhoneKeys) {
+      if (answeredPhones.has(key)) {
+        missedCalledBack += 1;
+      }
+    }
+  }
+
+  return {
+    outboundUniqueAnswered: answeredPhones.size,
+    outboundRawAnswered,
+    outboundRawTotal,
+    missedCalledBack,
   };
 }

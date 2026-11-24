@@ -164,19 +164,43 @@ export function renderReportHtml(
     : '<span class="badge prelim">Wstępny (GA4 w trakcie domykania)</span>';
 
   const funnelBase = Math.max(payload.crm.funnel.all, 1);
+  const currentNew =
+    payload.crm.funnel.currentNew ??
+    Math.max(0, payload.crm.funnel.all - payload.crm.funnel.inProgress - payload.crm.funnel.lost);
+  const currentInProgress =
+    payload.crm.funnel.currentInProgress ??
+    Math.max(0, payload.crm.funnel.inProgress - payload.crm.funnel.offer);
+  const currentOffer =
+    payload.crm.funnel.currentOffer ??
+    Math.max(0, payload.crm.funnel.offer - payload.crm.funnel.won);
+
   const funnelRows = [
-    { label: 'Wszystkie leady sprzedażowe', count: payload.crm.funnel.all, color: '#475569' },
-    { label: 'W kontakcie', count: payload.crm.funnel.inProgress, color: '#2563eb' },
-    { label: 'Oferta / Wniosek', count: payload.crm.funnel.offer, color: '#7c3aed' },
-    { label: 'Wygrane', count: payload.crm.funnel.won, color: '#10b981' },
-    { label: 'Przegrane', count: payload.crm.funnel.lost, color: '#ef4444' },
+    { label: 'Nowy (czeka na kontakt)', count: currentNew, cohort: null as number | null, color: '#64748b' },
+    {
+      label: 'W kontakcie',
+      count: currentInProgress,
+      cohort: payload.crm.funnel.inProgress > currentInProgress ? payload.crm.funnel.inProgress : null,
+      color: '#2563eb',
+    },
+    {
+      label: 'Oferta / Wniosek',
+      count: currentOffer,
+      cohort: payload.crm.funnel.offer > currentOffer ? payload.crm.funnel.offer : null,
+      color: '#7c3aed',
+    },
+    { label: 'Wygrane', count: payload.crm.funnel.won, cohort: null, color: '#10b981' },
+    { label: 'Przegrane', count: payload.crm.funnel.lost, cohort: null, color: '#ef4444' },
   ]
     .map((f) => {
       const pct = Math.round((f.count / funnelBase) * 100);
+      const cohortHint =
+        f.cohort !== null
+          ? ` <span style="font-weight:400;color:#64748b">(łącznie przeszło: ${fmtNum(f.cohort)})</span>`
+          : '';
       return `
       <div class="funnel-row">
         <div class="funnel-meta">
-          <span>${escapeHtml(f.label)}</span>
+          <span>${escapeHtml(f.label)}${cohortHint}</span>
           <strong>${fmtNum(f.count)} (${pct}%)</strong>
         </div>
         <div class="bar-track"><div class="bar-fill" style="width:${Math.max(
@@ -476,7 +500,9 @@ export function renderReportHtml(
   </div>
 
   <div class="two-col">
-    <section class="card">
+    ${
+      vis.sections.hotline !== false
+        ? `<section class="card">
       <h2 class="card-title">
         <span>Infolinia (Thulium — unikalni klienci)</span>
         <span class="card-note">Odbieralność: ${fmtPct(
@@ -490,6 +516,13 @@ export function renderReportHtml(
         <div class="hpill"><div class="l">Nieodebrane / IVR (unikalni)</div><div class="v" style="color:#d97706">${fmtNum(
           payload.hotline.uniqueMissed
         )}</div><div class="l">${fmtNum(payload.hotline.rawMissed)} prób</div></div>
+        <div class="hpill"><div class="l">Oddzwonienia (unik.)</div><div class="v" style="color:#2563eb">${fmtNum(
+          payload.hotline.outboundUniqueAnswered ?? 0
+        )}</div><div class="l">${fmtNum(
+          payload.hotline.outboundRawTotal ?? 0
+        )} prób • ${fmtNum(
+          payload.hotline.missedCalledBack ?? 0
+        )} z nieodebranych</div></div>
         <div class="hpill"><div class="l">Krótkie &lt;30s</div><div class="v">${fmtNum(
           payload.hotline.rawShortAnswered
         )}</div><div class="l">Połączone &lt;30s</div></div>
@@ -510,18 +543,20 @@ export function renderReportHtml(
               )
               .join('')}</tbody></table>`
       }
-    </section>
+    </section>`
+        : ''
+    }
 
     <section class="card">
       <h2 class="card-title">
         <span>Lejek CRM (Thulium)</span>
-        <span class="card-note">Wartość wygranych: ${fmtPln(
-          payload.crm.wonValue
-        )}</span>
+        <span class="card-note">Wszystkie: ${fmtNum(
+          payload.crm.funnel.all
+        )} • Wygrane: ${fmtPln(payload.crm.wonValue)}</span>
       </h2>
       ${funnelRows}
       <p class="card-note" style="margin-top:10px">
-        W toku: ${fmtPln(payload.crm.activeValue)} • Odfiltrowane (Nieodebrane/SPAM/Test): ${fmtNum(
+        W toku: ${fmtPln(payload.crm.activeValue)} • Odfiltrowane (SPAM/Połączone/Test): ${fmtNum(
     payload.crm.excludedCount
   )} • Zalegające &gt;24h w Nowy: ${fmtNum(payload.crm.staleNewCount)}
       </p>

@@ -12,9 +12,12 @@ export type ReportAlertKey =
   | 'zero_web_forms'
   | 'period_normal';
 
+export type ReportSectionKey = 'hotline';
+
 export interface ReportVisibilityConfig {
   kpis: Record<ReportKpiKey, boolean>;
   alerts: Record<ReportAlertKey, boolean>;
+  sections: Record<ReportSectionKey, boolean>;
 }
 
 export const REPORT_KPI_KEYS: ReportKpiKey[] = [
@@ -33,6 +36,8 @@ export const REPORT_ALERT_KEYS: ReportAlertKey[] = [
   'period_normal',
 ];
 
+export const REPORT_SECTION_KEYS: ReportSectionKey[] = ['hotline'];
+
 export const DEFAULT_REPORT_VISIBILITY: ReportVisibilityConfig = {
   kpis: {
     sessions: true,
@@ -48,6 +53,9 @@ export const DEFAULT_REPORT_VISIBILITY: ReportVisibilityConfig = {
     zero_web_forms: true,
     period_normal: true,
   },
+  sections: {
+    hotline: true,
+  },
 };
 
 export function normalizeReportVisibility(raw: unknown): ReportVisibilityConfig {
@@ -60,6 +68,10 @@ export function normalizeReportVisibility(raw: unknown): ReportVisibilityConfig 
   const rawAlerts =
     src.alerts && typeof src.alerts === 'object'
       ? (src.alerts as Record<string, unknown>)
+      : {};
+  const rawSections =
+    src.sections && typeof src.sections === 'object'
+      ? (src.sections as Record<string, unknown>)
       : {};
 
   const kpis = { ...DEFAULT_REPORT_VISIBILITY.kpis };
@@ -76,7 +88,14 @@ export function normalizeReportVisibility(raw: unknown): ReportVisibilityConfig 
     }
   }
 
-  return { kpis, alerts };
+  const sections = { ...DEFAULT_REPORT_VISIBILITY.sections };
+  for (const key of REPORT_SECTION_KEYS) {
+    if (typeof rawSections[key] === 'boolean') {
+      sections[key] = rawSections[key] as boolean;
+    }
+  }
+
+  return { kpis, alerts, sections };
 }
 
 export function getAlertKey(alert: {

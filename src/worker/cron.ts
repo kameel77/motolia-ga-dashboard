@@ -25,6 +25,7 @@ import {
   mapThuliumSource,
   isMissedCallTicket,
   classifyInboundCall,
+  normalizePhone,
 } from "../lib/thulium-mapping";
 import { runScheduledReportGeneration } from "../lib/report-builder";
 
@@ -483,12 +484,17 @@ async function collectThulium(): Promise<void> {
       const callBillsec = parseInt(call.billsec) || 0;
       const callWaitTime = parseInt(call.wait_time) || 0;
       const callAgentName = call.user_login || call.dst_user_login || null;
+      const rawCallPhone =
+        callDirection.toUpperCase() === "OUTBOUND"
+          ? call.dst || call.src || ""
+          : call.src || "";
+      const callPhone = normalizePhone(rawCallPhone) || rawCallPhone;
 
       await prisma.crmCall.upsert({
         where: { id: String(call.connection_id) },
         create: {
           id: String(call.connection_id),
-          phone: call.src || "",
+          phone: callPhone,
           direction: callDirection,
           disposition: call.disposition,
           duration: parseInt(call.duration) || 0,
@@ -499,6 +505,7 @@ async function collectThulium(): Promise<void> {
           timestamp,
         },
         update: {
+          phone: callPhone,
           disposition: call.disposition,
           duration: parseInt(call.duration) || 0,
           billsec: callBillsec,

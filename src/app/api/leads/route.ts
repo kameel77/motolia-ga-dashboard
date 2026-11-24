@@ -40,13 +40,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Core sales pipeline filter: exclude missed-call queue tickets, SPAM, merged, and test tickets
+    // Core sales pipeline filter: exclude SPAM, merged, and test tickets; keep Nieodebrane callbacks in sales funnel
     const salesLeadWhere: Prisma.CrmLeadWhereInput = {
       status: { not: CrmLeadStatus.EXCLUDED },
-      NOT: [
-        { queueName: { contains: 'Nieodebrane', mode: 'insensitive' } },
-        { subject: { contains: 'Nieodebrane', mode: 'insensitive' } },
-      ],
     };
 
     const salesDateWhere: Prisma.CrmLeadWhereInput = {
